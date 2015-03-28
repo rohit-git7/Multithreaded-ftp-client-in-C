@@ -2,7 +2,7 @@
 Apart from all functionalities of standard FTP, the important thing on which I have worked is to increase the downloading speed of very large files using multithreading(used `POSIX` threads).                                 
 For very large files, multiple threads are created and each thread creates an `instruction connection` and `data connection` with the server. Each thread downloads a specific chunk of data and then all are combined together to get the file.                                                                                                             
 #Note:
-Use only for very large files because creating threads is also an overhead on CPU. Performance will degrade for smaller files.                                                                                                  
+Use only for very large files because creating and managing threads is also an overhead for CPU. Performance will degrade for smaller files.                                                                                                  
 
 Following functions are included. For example:                                                                  
 `ls` : To list files in current directory on server side.                                                                
