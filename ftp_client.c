@@ -60,6 +60,10 @@ int main(int argc, char *argv[])
 	int ip_valid;
 	int temp = MIN_VALUE;
 	int count;
+	int dir_check;	
+
+	clock_t start,end;
+	double cpu_time;
 
 	struct sockaddr_in serverAddress;/* client will connect on this */
 	
@@ -96,7 +100,7 @@ int main(int argc, char *argv[])
 
 	if(sockfd == -1)/* Error in socket creation */
 	{
-        	perror("Error:"); 
+        	perror("Error"); 
 		exit(1);
 	}
 
@@ -294,6 +298,28 @@ int main(int argc, char *argv[])
 			getcwd(working_dir,MAXSZ);	
 			ls_dir(working_dir);
 		}
+
+		/* Create directory on client side */
+		if(strncmp(user_input,"!mkdir ",7) == 0)
+		{
+			dir_check = mkdir(user_input + 7,0755);
+			if(dir_check == -1)
+				perror("Error");
+			else
+				printf("Directory successfully created\n");
+			printf("\n");
+		}		
+
+		/* Remove directory on client side */
+		if(strncmp(user_input,"!rmdir ",7) == 0)
+		{
+			dir_check = rmdir(user_input + 7);
+			if(dir_check == -1)
+				perror("Error");
+			else
+				printf("Directory successfully removed\n");
+			printf("\n");
+		}		
 		
 		/* Change directory on server side */
 		if(strncmp(user_input,"cd ",3) == 0)
@@ -338,7 +364,11 @@ int main(int argc, char *argv[])
 		/* Download file from server */
 		if(strncmp(user_input,"get ",4) == 0)
 		{
+			start = clock();
 			get_content(argv[1],user_input,sockfd,home_dir);
+			end = clock();
+			cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
+			printf("Time taken %lf\n\n",cpu_time);
 		}
 		
 		/* Upload file to server */
