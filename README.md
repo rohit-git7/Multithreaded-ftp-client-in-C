@@ -20,7 +20,8 @@ Following functions are included. For example:
 `!ls` : To list files in current directory on client side.                                                            
 `!ls -l` : Same as `!ls`, with some more details.                                                                     
 `!pwd` : Current working directory on client side.                                                                    
-`!cd directory_name` : Traverse file system on client side.                                                           `!mkdir directory_name` : Create directory on client side.                                                            
+`!cd directory_name` : Traverse file system on client side.                                                          
+`!mkdir directory_name` : Create directory on client side.                                                            
 `!rmdir directory_name` : Remove directory on client side.                                                            
                                                                                                                      
 To run:                                                                                                           
