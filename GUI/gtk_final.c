@@ -8,12 +8,14 @@
 #include"put_unique.h"
 #include"get_content.h"
 
+/* Focus out popup window */
 gboolean on_popup_focus_out (GtkWidget *widget,GdkEventFocus *event,gpointer data)
 {
 	gtk_widget_destroy (widget);
 	return TRUE;
 }
 
+/* Popup window if a command is running and user tries to execute another command */
 void already_running(Appstate *app_state)
 {
 
@@ -22,7 +24,7 @@ void already_running(Appstate *app_state)
 	GtkWidget *label;
 	GtkWidget *horiz_align;
 	
-
+	/* Create window */
 	popup_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 	gtk_window_set_title (GTK_WINDOW (popup_window), "Error");
 	gtk_container_set_border_width (GTK_CONTAINER (popup_window), 10);
@@ -51,9 +53,10 @@ void already_running(Appstate *app_state)
 	
 	gtk_widget_show_all (popup_window);
 	gtk_widget_grab_focus (popup_window);
-
+	return;
 }
 
+/* Pops up window if user tries to execute a command without setting up a connection with server */
 void no_connection(Appstate *app_state)
 {
 
@@ -91,9 +94,10 @@ void no_connection(Appstate *app_state)
 	
 	gtk_widget_show_all (popup_window);
 	gtk_widget_grab_focus (popup_window);
-
+	return;
 }
 
+/* Help button: Pops up window with details about using the program */
 void help_func(GtkWidget *widget,Appstate *app_state)
 {
 
@@ -131,11 +135,10 @@ void help_func(GtkWidget *widget,Appstate *app_state)
 
 	gtk_widget_show_all (popup_window);
 	gtk_widget_grab_focus (popup_window);
-
+	return;
 }
 
-
-/*Get home directory of user executing program */
+/* About us */
 void about_us_func(GtkWidget *widget,Appstate *app_state)
 {
 
@@ -173,7 +176,7 @@ void about_us_func(GtkWidget *widget,Appstate *app_state)
 
 	gtk_widget_show_all (popup_window);
 	gtk_widget_grab_focus (popup_window);
-
+	return;
 }
 
 
@@ -188,52 +191,59 @@ char * find_home_dir(char *file)
 
 }
 
+/* Remove directory on client side */
 void rmdir_cli(Appstate *app_state,char *user_input)
 {
 
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection is not established
 	{
-		no_connection(app_state);
+		no_connection(app_state);//Call popup window function
 		return;
 	}
 	
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command is already executing
 	{
-		already_running(app_state);
+		already_running(app_state);//Call popup window function
 		return;
 	}
-	
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
-
 	app_state->running = 1;
-	int dir_check = rmdir(user_input + 7);
+
+	int dir_check = rmdir(user_input + 7);//Remove directory
+	
 	if(dir_check == -1)
 		sprintf(buff,"Error: %s\n",strerror(errno));
 	else
 		sprintf(buff,"Directory successfully removed\n");
 	
 	print_buff(app_state);
+	
+	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
+
+	free(user_input);
 	return;
 }
 
+/* Remove directory on server */
 void rmdir_serv(Appstate *app_state,char *user_input)
 {
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection is not established
 	{
-		no_connection(app_state);
+		no_connection(app_state);//Call popup window function
 		return;
 	}
 	
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command is already executing
 	{
-		already_running(app_state);
+		already_running(app_state);//Call popup window function
 		return;
 	}
 	
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
-
 	app_state->running = 1;
 	
 	int no_of_bytes;
@@ -247,6 +257,7 @@ void rmdir_serv(Appstate *app_state,char *user_input)
 	sprintf(buff,"Command: RMD %s\nResponse: ",user_input + 6);	
 	print_buff(app_state);
 	
+	/* Send request to server to remove specified directory */
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0 )
 	{
@@ -264,57 +275,67 @@ void rmdir_serv(Appstate *app_state,char *user_input)
 			break;	
 	}
 	
+	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
-
 	app_state->running = 0;
-	return;
 
+	free(user_input);
+
+	return;
 }
 
+/* Create directory on client */
 void mkdir_cli(Appstate *app_state,char *user_input)
 {
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection is not established
 	{
-		no_connection(app_state);
+		no_connection(app_state);//Call popup window function
 		return;
 	}
 	
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command is already executing
 	{
-		already_running(app_state);
+		already_running(app_state);//Call popup window function
 		return;
 	}
 	
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
-
 	app_state->running = 1;
-	int dir_check = mkdir(user_input + 7,0755);
+
+	int dir_check = mkdir(user_input + 7,0755);//Create directoty command
+	
 	if(dir_check == -1)
 		sprintf(buff,"Error: %s\n",strerror(errno));
 	else
 		sprintf(buff,"Directory successfully created\n");
 	
 	print_buff(app_state);
+	
+	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
+	
+	free(user_input);
 	return;
 }
 
+/* Rename file on client */
 void rename_cli(Appstate *app_state,char *old_name, char *new_name)
 {
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection not established
 	{
-		no_connection(app_state);
+		no_connection(app_state);//Call popup window function
 		return;
 	}
 	
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command aleady executing
 	{
-		already_running(app_state);
+		already_running(app_state);//Call popup window function
 		return;
 	}
 	
-	
+	/* Variables */
 	int old_fd;
 	int new_fd;
 	int no_of_bytes;
@@ -330,7 +351,7 @@ void rename_cli(Appstate *app_state,char *old_name, char *new_name)
 	bzero(data,MAXSZ);
 	bzero(file_name,MAXSZ);
 
-	old_fd = open(old_name,O_RDONLY);
+	old_fd = open(old_name,O_RDONLY);//Open file
 	if(old_fd == -1)	
 	{
 		sprintf(buff,"Error: Could not rename file!\n\n");
@@ -338,7 +359,7 @@ void rename_cli(Appstate *app_state,char *old_name, char *new_name)
 		return;
 	}	
 
-	new_fd = open(new_name,O_WRONLY|O_CREAT|O_TRUNC,0644);
+	new_fd = open(new_name,O_WRONLY|O_CREAT|O_TRUNC,0644);//Create new file
 	
 	if(new_fd == -1)	
 	{
@@ -348,10 +369,11 @@ void rename_cli(Appstate *app_state,char *old_name, char *new_name)
 		return;
 	}	
 
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
 
-	while((no_of_bytes = read(old_fd,data,MAXSZ)) > 0)
+	while((no_of_bytes = read(old_fd,data,MAXSZ)) > 0)//Copy data in new file
 	{	
 		total = 0;
 		while(total < no_of_bytes)
@@ -361,47 +383,53 @@ void rename_cli(Appstate *app_state,char *old_name, char *new_name)
 		}
 	}
 
-	getcwd(cwd,MAXSZ);
+	getcwd(cwd,MAXSZ);//Get current directory
 	sprintf(file_name,"%s/%s",cwd,old_name);
-	if(unlink(file_name) != 0)
+	if(unlink(file_name) != 0)//Delete file
 	{
 		sprintf(buff,"Error: Could not rename file!\n\n");
 		print_buff(app_state);
 		close(old_fd);
 		sprintf(file_name,"%s/%s",cwd,new_name);
-		unlink(file_name);
+		unlink(file_name);//Delete new file
 		close(new_fd);
 	}
 	else
 	{
 		sprintf(buff,"File renamed successfully!\n\n");
 		print_buff(app_state);
+
+		/* Close file descriptors */
 		close(old_fd);
 		close(new_fd);
 	}
 
+	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
+	
+	free(old_name);
+	free(new_name);
 	return;
 }
 
-
+/* Rename file on server*/
 void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 {
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection not established
 	{
-		no_connection(app_state);
+		no_connection(app_state);//Call popup window function
 		return;
 	}
 	
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command already running
 	{
-		already_running(app_state);
+		already_running(app_state);//Call popup window function
 		return;
 	}
 	
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
-
 	app_state->running = 1;
 	
 	int no_of_bytes;
@@ -416,7 +444,7 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 	sprintf(buff,"Command: RNFR %s\nResponse: ",old_name);
 	print_buff(app_state);
 	
-		
+	/* Send command to server */	
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0 )
 	{
@@ -426,8 +454,8 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 		{
 			temp = 1;	
 		}
+
 		sprintf(buff,"%s",message_from_server);
-				
 		print_buff(app_state);
 				
 		if(strstr(message_from_server,"350 ") > 0 || strstr(message_from_server,"450 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
@@ -439,8 +467,10 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 			
 	if(temp  == 1)
 	{	
+		/* Renaming failed. Reset 'running' variable */
 		app_state->running = 0;
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
+	
 		return;
 	}
 	sprintf(message_to_server,"RNTO %s\r\n",new_name);
@@ -469,31 +499,35 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 	sprintf(buff,"\n");
 	print_buff(app_state);
 	
-	
+	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
+	
+	free(old_name);
+	free(new_name);
 	return;
 }
 
+/* Download file from server */
 void down_serv(Appstate *app_state,char *user_input)
 {
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection not established
 	{
-		no_connection(app_state);
+		no_connection(app_state);//Call popup window function
 		return;
 	}
 
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command already running
 	{
-		already_running(app_state);
+		already_running(app_state);//Call popup window function
 		return;
 	}
 
 	char *address = (char *)malloc(MAXSZ);
 	
+	/* Get IP Address of server from IP Address entry */
 	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 	char *argv = address;	
-
 
 	char *home_dir= find_home_dir(argv);
 
@@ -501,37 +535,45 @@ void down_serv(Appstate *app_state,char *user_input)
 	clock_t end;
 	double cpu_time;
 	
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
 
-	start = clock();
-	get_content(argv,user_input,app_state,home_dir);
-	end = clock();
-	cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
+	start = clock();//Start clock
+	get_content(argv,user_input,app_state,home_dir);//Call function to get files
+	end = clock();//Stop clock
+	cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;//Calculate CPU time
 	sprintf(buff,"Time taken %lf\n\n",cpu_time);
 	print_buff(app_state);
 
+	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
 
+	free(user_input);
+	free(argv);
+	free(address);
+	free(home_dir);
 	return;
 }
 
+/* Change directory on server */
 void serv_cd_dir(Appstate *app_state,char *user_input)
 {
 	int no_of_bytes;
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection not established
 	{
-		no_connection(app_state);
+		no_connection(app_state);//Call popup window function
 		return;
 	}
 
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command already running
 	{
-		already_running(app_state);
+		already_running(app_state);//Call popup window function
 		return;
 	}
 
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
 
@@ -543,8 +585,9 @@ void serv_cd_dir(Appstate *app_state,char *user_input)
 	sprintf(message_to_server,"CWD %s\r\n",user_input + 3);
 	sprintf(buff,"Command: CWD %s\nResponse: ",user_input+3);
 	print_buff(app_state);
-	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
 	
+	/* Requesting to change directory */
+	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);	
 		
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
 	{
@@ -560,6 +603,7 @@ void serv_cd_dir(Appstate *app_state,char *user_input)
 	bzero(message_from_server,MAXSZ);
 	bzero(buff,MAXSZ);
 	
+	/* Getting working directory to display after changing directory */
 	sprintf(message_to_server,"PWD\r\n");
 	
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
@@ -576,32 +620,38 @@ void serv_cd_dir(Appstate *app_state,char *user_input)
 	sprintf(buff,"\n");
 	print_buff(app_state);
 
+	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
+	
+	free(user_input);
 	return;
 }
 
+/* Change directory on client side */
 void cli_cd_dir(Appstate *app_state,char *user_input)
 {
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection not established
 	{
-		no_connection(app_state);
+		no_connection(app_state);//Call popup window function
 		return;
 	}
 
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command already running
 	{
-		already_running(app_state);
+		already_running(app_state);//Call popup window function
 		return;
 	}
 
 	char cwd[MAXSZ];	
+	
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
 	
-	if(chdir(user_input + 4) == 0)
+	if(chdir(user_input + 4) == 0)//Change directory
 	{
-		getcwd(cwd,MAXSZ);
+		getcwd(cwd,MAXSZ);//Get current working directory after changing directory
 		sprintf(buff,"Directory successfully changed\nYou are in directory: \"%s\"\n\n",cwd);
 	}			
 	else
@@ -610,24 +660,28 @@ void cli_cd_dir(Appstate *app_state,char *user_input)
 	}
 	
 	print_buff(app_state);
+	
+	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
 
+	free(user_input);
 	return;
 }
 
+/*Remove file on client side*/
 void cli_rmfile(Appstate *app_state,char *user_input)
 {
 
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection not established
 	{
-		no_connection(app_state);
+		no_connection(app_state);//Call popup window function
 		return;
 	}
 
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command already running
 	{
-		already_running(app_state);
+		already_running(app_state);//Call popup window function
 		return;
 	}
 	
@@ -636,13 +690,14 @@ void cli_rmfile(Appstate *app_state,char *user_input)
 	bzero(cwd,MAXSZ);
 	bzero(file_path,MAXSZ);
 
-	getcwd(cwd,MAXSZ);
+	getcwd(cwd,MAXSZ);//Get current working directory
 	sprintf(file_path,"%s/%s",cwd,user_input + 4);
 
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
 	
-	if(unlink(file_path) == 0)
+	if(unlink(file_path) == 0)//Remove file
 	{
 		sprintf(buff,"File succesfully removed!\n\n");
 	}			
@@ -653,54 +708,63 @@ void cli_rmfile(Appstate *app_state,char *user_input)
 	
 	print_buff(app_state);
 
+	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
+	
+	free(user_input);
 	return;
 
 }
 
+/* List files on client */
 void ls_cli_func(GtkWidget *widget,Appstate *app_state)
 {
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection not established
 	{
-		no_connection(app_state);
+		no_connection(app_state);//Call popup window function
 		return;
 	}
 
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command already running
 	{
-		already_running(app_state);
+		already_running(app_state);//Call popup window function
 		return;
 	}
 	
 	char working_dir[MAXSZ];
 
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
 
 	getcwd(working_dir,MAXSZ);	
-	ls_l_dir(app_state,working_dir);
+	ls_l_dir(app_state,working_dir);//Call function to list files
 
+	/* Reset 'running' variable */
 	app_state->running = 0;
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
+	
 	return;
 
 }
 
+/* List files on server */
 void ls_ser_func(GtkWidget *widget,Appstate *app_state)
 {
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection not established
 	{
 		no_connection(app_state);
 		return;
 	}
 
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command already running
 	{
 		already_running(app_state);
 		return;
 	}
 
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
 
@@ -712,28 +776,34 @@ void ls_ser_func(GtkWidget *widget,Appstate *app_state)
 
 
 	list_content(argv,user_input,app_state);	
+	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
+	
+	free(argv);
+	free(address);
 	return;
 
 }
 
+/* Remove file on server */
 void serv_rmfile(Appstate *app_state,char *user_input)
 {
 
 	int no_of_bytes;
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connection not established
 	{
 		no_connection(app_state);
 		return;
 	}
 
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command already running
 	{
 		already_running(app_state);
 		return;
 	}
 
+	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
 
@@ -747,7 +817,7 @@ void serv_rmfile(Appstate *app_state,char *user_input)
 	sprintf(buff,"Command: DELE %s\nResponse: ",user_input+3);	
 	print_buff(app_state);
 	
-
+	/* Requesting server to delete specified file */
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0 )
 	{
@@ -765,20 +835,24 @@ void serv_rmfile(Appstate *app_state,char *user_input)
 			
 	}
 
+	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
+
+	free(user_input);
 	return;
 }
 
+/* THis functions includes the case when commands are executed manually i.e without GUI */
 void run_command(GtkWidget *widget, Appstate *app_state)
 {
-	if(app_state->status == 0)
+	if(app_state->status == 0)//Connectionnot established
 	{
 		no_connection(app_state);
 		return;
 	}
 
-	if(app_state->running == 1)
+	if(app_state->running == 1)//Command already running
 	{
 		already_running(app_state);
 		return;
@@ -800,8 +874,9 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 	char working_dir[MAXSZ];
 	char old_name[MAXSZ];
 	char new_name[MAXSZ];
+	char file_name[MAXSZ];
 
-	char *home_dir= find_home_dir(argv);
+	char *home_dir= find_home_dir(argv);//Get home directory of user
 
 	int no_of_bytes;
 	
@@ -811,6 +886,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 	bzero(message_from_server,MAXSZ);
 	bzero(dir,MAXSZ);
 	bzero(working_dir,MAXSZ);
+	bzero(file_name,MAXSZ);
 	bzero(old_name,MAXSZ);
 	bzero(new_name,MAXSZ);
 
@@ -927,7 +1003,24 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		rename_cli(app_state,old_name,new_name);
 	}
 
+	if(strncmp(user_input,"!rm ",4) == 0)
+	{
+		getcwd(working_dir,MAXSZ);//Get current working directory
+		sprintf(file_name,"%s/%s",working_dir,user_input + 4);
 
+	
+		if(unlink(file_name) == 0)//Remove file
+		{
+			sprintf(buff,"File succesfully removed!\n\n");
+		}			
+		else
+		{
+			sprintf(buff,"Error: %s\n\n",strerror(errno));
+		}
+	
+		print_buff(app_state);
+
+	}
 	
 	/* Change directory on server side */
 	if(strncmp(user_input,"cd ",3) == 0)
@@ -1106,13 +1199,19 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		}
 	
 	}
-	
+
+	/* Reset 'running' variable */	
 	app_state->running = 0;
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 		
+	free(user_input);
+	free(argv);
+	free(address);
+	free(home_dir);
 	return;
 }
 
+/* Quit function */
 void close_func(GtkWidget *widget, Appstate *app_state)
 {
 	int no_of_bytes;
