@@ -1,3 +1,6 @@
+/*
+Print buffer on text view
+*/
 void print_buff(Appstate *app_state)
 {
 	GtkTextIter iter;
@@ -15,5 +18,6 @@ void print_buff(Appstate *app_state)
 	while(gtk_events_pending())
 		gtk_main_iteration();
 
+	return;
 }
 
