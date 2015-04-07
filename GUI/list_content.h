@@ -19,7 +19,7 @@ void list_content(char *arg, char *user_input, Appstate *app_state)
 	/* Initialise character arrays */
 	bzero(message_from_server,MAXSZ);
 	bzero(message_to_server,MAXSZ);
-	bzero(buff,MAXSZ);
+	bzero(buff,MAXSZ1);
 	/* Request server to start BINARY mode */
 	send(app_state->sockfd,"TYPE I\r\n",8,0);
 		
@@ -104,7 +104,7 @@ void list_content(char *arg, char *user_input, Appstate *app_state)
 
 
 		/* Read data on new PASSIVE socket */		
-				
+		bzero(buff,MAXSZ1);				
 		while((no_of_bytes = recv(newsockfd,message_from_server,MAXSZ,0)) > 0)
 		{
 			message_from_server[no_of_bytes] = '\0';
