@@ -14,10 +14,8 @@ void print_buff(Appstate *app_state)
 	gtk_text_buffer_get_end_iter(buffer,&iter);
 	gtk_text_view_scroll_to_iter(GTK_TEXT_VIEW(app_state->text_view),&iter,0.0,FALSE,0,0);
 			
-	bzero(buff,MAXSZ);
 	while(gtk_events_pending())
 		gtk_main_iteration();
 
-	return;
 }
 
