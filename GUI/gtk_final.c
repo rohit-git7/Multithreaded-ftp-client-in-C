@@ -1381,7 +1381,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	{
 		sprintf(buff,"Error: Invalid ip-address\n");
 		buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app_state->text_view));
-		gtk_text_buffer_set_text(buffer,buff,-1);
+		gtk_text_buffer_set_text(buffer,buff,strlen(buff));
 		while(gtk_events_pending())
 			gtk_main_iteration();
 		return -1;
@@ -1394,7 +1394,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	{
         	sprintf(buff,"Error: %s\n",strerror(errno)); 
 		buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app_state->text_view));
-		gtk_text_buffer_set_text(buffer,buff,-1);
+		gtk_text_buffer_set_text(buffer,buff,strlen(buff));
 		while(gtk_events_pending())
 			gtk_main_iteration();
 		return -1;
@@ -1413,7 +1413,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	{
         	sprintf(buff,"Error: %s\n",strerror(errno)); 
 		buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app_state->text_view));
-		gtk_text_buffer_set_text(buffer,buff,-1);
+		gtk_text_buffer_set_text(buffer,buff,strlen(buff));
 		while(gtk_events_pending())
 			gtk_main_iteration();
 		return -1;
@@ -1427,7 +1427,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	sprintf(buff,"Connected to %s.\n",argv);
 	
 	buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app_state->text_view));
-	gtk_text_buffer_set_text(buffer,buff,-1);
+	gtk_text_buffer_set_text(buffer,buff,strlen(buff));
 	
 	while(gtk_events_pending())
 		gtk_main_iteration();
@@ -3041,7 +3041,7 @@ int main( int argc,char *argv[] )
 	app_state.text_view = gtk_text_view_new_with_buffer(buffer);                                    
 	gtk_text_view_set_buffer(GTK_TEXT_VIEW(app_state.text_view),buffer);
 	buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app_state.text_view));
-	gtk_text_buffer_set_text(buffer,"\t\t\t\t\t\t\t\t\tWelcome to ST-FTP!",-1);
+	gtk_text_buffer_set_text(buffer,"\t\t\t\t\t\t\t\t\tWelcome to ST-FTP!",strlen(buff));
 
 	/* Scrolling window */
 	scrolled_window = gtk_scrolled_window_new(NULL, NULL);              
