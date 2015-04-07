@@ -42,7 +42,7 @@ void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
 	bzero(pwd,MAXSZ);
 	bzero(size_file,MAXSZ);	
 	bzero(temp_file,MAXSZ);
-	bzero(buff,MAXSZ);
+	bzero(buff,MAXSZ1);
 
 	/* Getting file size from server*/
 	sprintf(size_file,"SIZE %s\r\n",user_input + 4);
