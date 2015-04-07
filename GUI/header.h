@@ -19,6 +19,7 @@
 
 #define PORT 21
 #define MAXSZ 4096
+#define MAXSZ1 5000
 
 #define MIN_VALUE -1
 #define INITIALISE 0
@@ -30,7 +31,7 @@
 
 char user[MAXSZ];/* user details sent to server */
 char pass[MAXSZ];/* password details sent to server */
-char buff[MAXSZ];  
+char buff[MAXSZ1];  
 GtkTextBuffer *buffer; 
 char passive[]="PASV\r\n";
 
