@@ -32,14 +32,19 @@
 char user[MAXSZ];/* user details sent to server */
 char pass[MAXSZ];/* password details sent to server */
 char buff[MAXSZ1];  
-GtkTextBuffer *buffer; 
 char passive[]="PASV\r\n";
+
+GtkTextBuffer *buffer;
 
 typedef struct _Appstate
 {
 	GtkWidget *window;
 	GtkWidget *entry;
+	GtkWidget *entry_dir;
+	GtkWidget *entry_dir_cli;
 	GtkWidget *text_view;
+	GtkWidget *view;
+	GtkWidget *view1;
 	GtkWidget *user;
 	GtkWidget *password;
 	GtkWidget *fileselect;
@@ -50,6 +55,10 @@ typedef struct _Appstate
 	int status;
 	int sockfd;
 	int running;
+	int seek;
+	int seek_cli;
+	int temp_file_descriptor;
+	int temp_file_descriptor_cli;
 }Appstate;
 
 struct userdetails
