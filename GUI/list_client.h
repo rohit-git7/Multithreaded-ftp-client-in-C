@@ -54,7 +54,8 @@ void ls_dir(Appstate *app_state,char *dir_name)
 	}
 	sprintf(buff,"\n");
 	print_buff(app_state);	
-	
+
+	bzero(buff,MAXSZ1);
 	closedir(fd);
 }
 
@@ -68,7 +69,7 @@ void ls_l_dir(Appstate *app_state,char *dir_name)
 	int val = INITIALISE;
 	int temp;
 
-	struct group *gp;/* structure contating group details */
+	struct group *gp;/* structure contaning group details */
 	struct passwd *pw;/* structure containing passwd file */
 	struct tm *info;
 	struct stat file_buff;
@@ -208,7 +209,147 @@ void ls_l_dir(Appstate *app_state,char *dir_name)
 	sprintf(buff,"total %d\n\n",val);
 	print_buff(app_state);	
 	
+	bzero(buff,MAXSZ1);
+	closedir(fd);
+
+}
+
+
+void ls_l_dir_view(Appstate *app_state,char *dir_name)
+{
+	char time_buff[MAXSZ];
+	char *arg[MAXSZ];
+	char data[MAXSZ];
 	
+	int i = INITIALISE;
+	int n;
+
+	struct group *gp;/* structure contaning group details */
+	struct passwd *pw;/* structure containing passwd file */
+	struct tm *info;
+	struct stat file_buff;
+	struct dirent *entry;
+	DIR *fd;
+	fd  = opendir(dir_name);/* Open directory */
+	if(fd == NULL)
+	{
+		return;
+	}
+	
+	while((entry = readdir(fd))!= NULL)/* Read directory */
+	{
+		
+	   if(strcmp(entry->d_name,".") != 0 && strcmp(entry->d_name,"..") != 0 && entry->d_name[0]!= '.')
+ 		{
+			*(arg + i) = entry->d_name;
+			i++;
+		}
+		
+		while(gtk_events_pending())
+			gtk_main_iteration();
+
+	}
+
+	n = i;
+	qsort(arg,n,sizeof(const char *),mycompare);
+
+	i = 0;
+	while(i < n)
+	{
+		bzero(data,MAXSZ);
+		lstat(*(arg + i),&file_buff);
+	   	gp = getgrgid(file_buff.st_gid);		
+		pw = getpwuid(file_buff.st_uid);
+		info = localtime(&(file_buff.st_mtime));
+		strftime(time_buff,sizeof(time_buff),"%b %d %H:%M",info);
+		
+			/* Selecting file type */		
+			switch(file_buff.st_mode & S_IFMT)
+			{
+				case S_IFCHR:
+					sprintf(data,"c");
+					break;
+				case S_IFBLK:
+					sprintf(data,"b");
+					break;
+				case S_IFDIR:
+                        		sprintf(data,"d");
+					break;
+				case S_IFLNK:
+					sprintf(data,"l");
+					break;
+				case S_IFIFO:
+					sprintf(data,"p");
+					break;
+				case S_IFSOCK:
+					sprintf(data,"s");
+					break;
+				default:
+					sprintf(data,"-");
+					break;
+			}
+			
+		
+			/* File permissions */
+			if(file_buff.st_mode & S_IRUSR)
+				strcat(data,"r");
+			else
+				strcat(data,"-");
+
+			if(file_buff.st_mode & S_IWUSR)
+				strcat(data,"w");
+			else
+				strcat(data,"-");
+		
+			if(file_buff.st_mode & S_IXUSR)
+				strcat(data,"x");
+			else
+				strcat(data,"-");
+
+			if(file_buff.st_mode & S_IRGRP)
+				strcat(data,"r");
+			else
+				strcat(data,"-");
+
+			if(file_buff.st_mode & S_IWGRP)
+				strcat(data,"w");
+			else
+				strcat(data,"-");
+
+			if(file_buff.st_mode & S_IXGRP)
+				strcat(data,"x");
+			else
+				strcat(data,"-");
+
+			if(file_buff.st_mode & S_IROTH)
+				strcat(data,"r");
+			else
+				strcat(data,"-");
+
+			if(file_buff.st_mode & S_IWOTH)
+				strcat(data,"w");
+			else
+				strcat(data,"-");
+			
+			if(file_buff.st_mode & S_IXOTH)
+				strcat(data,"x");
+			else
+				strcat(data,"-");
+
+		while(gtk_events_pending())
+			gtk_main_iteration();
+			write(app_state->temp_file_descriptor_cli,data,strlen(data));
+			bzero(data,MAXSZ);
+			if(((file_buff.st_mode & S_IFMT)^S_IFCHR) == 0 || ((file_buff.st_mode & S_IFMT)^S_IFBLK) ==0)
+				sprintf(data," %d %s %s 0 %s %s\n",(int)file_buff.st_nlink,pw->pw_name,gp->gr_name,time_buff,*(arg + i));
+			else
+				sprintf(data," %d %s %s %u %s %s\n",(int)file_buff.st_nlink,pw->pw_name,gp->gr_name,(unsigned int)file_buff.st_size,time_buff,*(arg + i));
+		
+		write(app_state->temp_file_descriptor_cli,data,strlen(data));
+
+		i++;
+	}
+
 	closedir(fd);
 
 }
