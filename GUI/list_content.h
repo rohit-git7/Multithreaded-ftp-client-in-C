@@ -107,6 +107,7 @@ void list_content(char *arg, char *user_input, Appstate *app_state)
 		bzero(buff,MAXSZ1);				
 		while((no_of_bytes = recv(newsockfd,message_from_server,MAXSZ,0)) > 0)
 		{
+			write(app_state->temp_file_descriptor,message_from_server,no_of_bytes);
 			message_from_server[no_of_bytes] = '\0';
 			sprintf(buff,"%s",message_from_server);
 			print_buff(app_state);
@@ -131,6 +132,7 @@ void list_content(char *arg, char *user_input, Appstate *app_state)
 		sprintf(buff,"\n");
 		print_buff(app_state);
 		
+	bzero(buff,MAXSZ1);
 	
 	tm.tv_sec = 0;
 	tm.tv_usec = 0;
