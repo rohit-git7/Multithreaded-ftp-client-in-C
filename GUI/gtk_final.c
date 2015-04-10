@@ -3,11 +3,957 @@
 #include"list_client.h"
 #include"passive_connect.h"
 #include"list_content.h"
+#include"list_content_view.h"
 #include"thread_get.h"
 #include"put_content.h"
 #include"put_unique.h"
 #include"get_content.h"
 
+void no_connection(Appstate *);
+void already_running(Appstate *);
+void cli_rmfile(Appstate *, char *);	
+void serv_rmfile(Appstate *, char *);	
+void down_serv(Appstate *,char *);
+void rename_serv_func(GtkWidget *,Appstate *);
+void rename_cli(Appstate *,char *,char *);
+void rename_serv(Appstate *,char *,char *);
+gboolean on_popup_focus_out (GtkWidget *,GdkEventFocus *,gpointer data);
+void new_func(Appstate *);
+void new_func_cli(Appstate *);
+
+
+char temporary_file[]="/tmp/myTMP-XXXXXX";//Temporary file to store file names on server
+char temporary_file_cli[]="/tmp/myTMPcli-XXXXXX";//Temporary file to store file names on client
+
+enum
+{
+	COL_PERM = 0,
+	COL_NAME,
+	COL_SIZE,
+	COL_MOD,
+	NUM_COLS
+};
+
+
+/* Upload file to server */
+void upload_cli(Appstate *app_state,char *user_input)
+{
+	if(app_state->status == 0)//Connection not established
+	{
+		no_connection(app_state);//Call popup window function
+		return;
+	}
+
+	if(app_state->running == 1)//Command already running
+	{
+		already_running(app_state);//Call popup window function
+		return;
+	}
+
+	char *address = (char *)malloc(MAXSZ);
+	
+	/* Get IP Address of server from IP Address entry */
+	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
+	char *argv = address;	
+
+	clock_t start;
+	clock_t end;
+	double cpu_time;
+	
+	/* Set 'running' variable */
+	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
+	app_state->running = 1;
+	gtk_entry_set_text(GTK_ENTRY(app_state->command),user_input); 
+
+	start = clock();//Start clock
+	put_unique(argv,user_input,app_state);//Call function to put files
+	end = clock();//Stop clock
+	cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;//Calculate CPU time
+	sprintf(buff,"Time taken %lf\n\n",cpu_time);
+	print_buff(app_state);
+
+	/* Reset 'running' variable */
+	list_content_view(argv,"ls -l",app_state);
+	new_func(app_state);		
+	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
+	app_state->running = 0;
+	gtk_entry_set_text(GTK_ENTRY(app_state->command),"Command"); 
+
+	return;
+}
+
+/* Upload from list store */
+void view_popup_menu_upload_cli(GtkWidget *menuitem, Appstate *app_state)
+{
+	GtkTreeView *treeview = GTK_TREE_VIEW(app_state->view1);
+	GtkTreeSelection *selection;
+	GtkTreeModel *model;
+	GtkTreeIter iter;
+	
+	char user_input[MAXSZ];
+	char *perm = (char *)malloc(MAXSZ);
+	char *filename = (char *)malloc(MAXSZ);
+
+	bzero(user_input,MAXSZ);
+
+	selection = gtk_tree_view_get_selection(treeview);
+	if(gtk_tree_selection_get_selected(selection,&model,&iter))
+	{	
+		gtk_tree_model_get(model,&iter,COL_NAME,&filename,-1);
+		gtk_tree_model_get(model,&iter,COL_PERM,&perm,-1);
+		
+		if(perm[0] != '-')
+		{
+			GtkWidget *popup_window;
+			GtkWidget *table;
+			GtkWidget *label;
+			GtkWidget *horiz_align;
+	
+			/* Create window */
+			popup_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+			gtk_window_set_title (GTK_WINDOW (popup_window), "Error");
+			gtk_container_set_border_width (GTK_CONTAINER (popup_window), 10);
+			gtk_window_set_resizable (GTK_WINDOW (popup_window), FALSE);
+			gtk_window_set_decorated (GTK_WINDOW (popup_window), TRUE);
+			gtk_window_set_skip_taskbar_hint (GTK_WINDOW (popup_window), TRUE);
+			gtk_window_set_skip_pager_hint (GTK_WINDOW (popup_window), TRUE);
+			gtk_widget_set_size_request (popup_window, 350, 60);
+			gtk_window_set_transient_for (GTK_WINDOW (popup_window), GTK_WINDOW (app_state->window));
+			gtk_window_set_position (GTK_WINDOW (popup_window), GTK_WIN_POS_CENTER);
+
+			gtk_widget_set_events (popup_window, GDK_FOCUS_CHANGE_MASK);
+			g_signal_connect (G_OBJECT (popup_window),
+        		       			    "focus-out-event",
+              			 		    G_CALLBACK (on_popup_focus_out),
+                	   				NULL);
+	
+			table = gtk_table_new (2,2,FALSE);
+			gtk_container_add(GTK_CONTAINER(popup_window),table);
+			label = gtk_label_new("\t\tCannot upload. Not a regular file!");
+
+			horiz_align = gtk_alignment_new(0,0,0,0);
+	    
+			gtk_container_add(GTK_CONTAINER(horiz_align),label);
+			gtk_table_attach(GTK_TABLE(table),horiz_align,1,2,0,1,GTK_FILL,GTK_FILL,0,0);
+	
+			gtk_widget_show_all (popup_window);
+			gtk_widget_grab_focus (popup_window);
+			
+		}	
+		
+		else
+		{
+			sprintf(user_input,"uniqput %s",filename);
+			upload_cli(app_state,user_input);
+		}
+	}
+}
+
+/* Remove from list store */
+void view_popup_menu_remove_cli(GtkWidget *menuitem, Appstate *app_state)
+{
+	GtkTreeView *treeview = GTK_TREE_VIEW(app_state->view1);
+	GtkTreeSelection *selection;
+	GtkTreeModel *model;
+	GtkTreeIter iter;
+	
+	char *filename = (char *)malloc(MAXSZ);
+	char *perm = (char *)malloc(MAXSZ);
+	
+	char user_input[MAXSZ];
+
+	bzero(user_input,MAXSZ);
+
+	selection = gtk_tree_view_get_selection(treeview);
+	if(gtk_tree_selection_get_selected(selection,&model,&iter))
+	{	
+		gtk_tree_model_get(model,&iter,COL_NAME,&filename,-1);
+		gtk_tree_model_get(model,&iter,COL_PERM,&perm,-1);
+		
+		if(perm[0] != '-')
+		{
+			GtkWidget *popup_window;
+			GtkWidget *table;
+			GtkWidget *label;
+			GtkWidget *horiz_align;
+	
+			/* Create window */
+			popup_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+			gtk_window_set_title (GTK_WINDOW (popup_window), "Error");
+			gtk_container_set_border_width (GTK_CONTAINER (popup_window), 10);
+			gtk_window_set_resizable (GTK_WINDOW (popup_window), FALSE);
+			gtk_window_set_decorated (GTK_WINDOW (popup_window), TRUE);
+			gtk_window_set_skip_taskbar_hint (GTK_WINDOW (popup_window), TRUE);
+			gtk_window_set_skip_pager_hint (GTK_WINDOW (popup_window), TRUE);
+			gtk_widget_set_size_request (popup_window, 350, 60);
+			gtk_window_set_transient_for (GTK_WINDOW (popup_window), GTK_WINDOW (app_state->window));
+			gtk_window_set_position (GTK_WINDOW (popup_window), GTK_WIN_POS_CENTER);
+
+			gtk_widget_set_events (popup_window, GDK_FOCUS_CHANGE_MASK);
+			g_signal_connect (G_OBJECT (popup_window),
+        		       			    "focus-out-event",
+              			 		    G_CALLBACK (on_popup_focus_out),
+                	   				NULL);
+	
+			table = gtk_table_new (2,2,FALSE);
+			gtk_container_add(GTK_CONTAINER(popup_window),table);
+			label = gtk_label_new("\t  Cannot remove. Not a regular file!");
+
+			horiz_align = gtk_alignment_new(0,0,0,0);
+	    
+			gtk_container_add(GTK_CONTAINER(horiz_align),label);
+			gtk_table_attach(GTK_TABLE(table),horiz_align,1,2,0,1,GTK_FILL,GTK_FILL,0,0);
+	
+			gtk_widget_show_all (popup_window);
+			gtk_widget_grab_focus (popup_window);
+			
+		}	
+		else		
+ 		{
+			sprintf(user_input,"!rm %s",filename);
+			cli_rmfile(app_state,user_input);	
+		}
+	}
+}
+ 
+/* Rename from list store */
+void view_popup_menu_rename_cli(GtkWidget *menuitem, Appstate *app_state)
+{
+	GtkTreeView *treeview = GTK_TREE_VIEW(app_state->view1);
+	GtkTreeSelection *selection;
+	GtkTreeModel *model;
+	GtkTreeIter iter;
+	GtkWidget *dialog;
+	GtkWidget *entry;
+	GtkWidget *entry1;
+	GtkWidget *content_area;
+
+	char user_input[MAXSZ];
+
+	
+	char *filename = (char *)malloc(MAXSZ);
+	selection = gtk_tree_view_get_selection(treeview);
+	if(gtk_tree_selection_get_selected(selection,&model,&iter))
+	{	
+		gtk_tree_model_get(model,&iter,COL_NAME,&filename,-1);
+	}
+	
+	dialog = gtk_dialog_new_with_buttons("Rename File(Client)",GTK_WINDOW(app_state->window),GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,NULL,NULL,NULL,NULL);
+	gtk_window_set_default_size(GTK_WINDOW(dialog),350,130);
+	gtk_dialog_add_button(GTK_DIALOG(dialog), "Ok", 0);
+	gtk_dialog_add_button(GTK_DIALOG(dialog), "Cancel", 1);
+
+	content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+	entry = gtk_entry_new(); 
+	entry1 = gtk_entry_new();
+	gtk_entry_set_text(GTK_ENTRY(entry1),filename); 
+	gtk_entry_set_text(GTK_ENTRY(entry),"New name"); 
+	gtk_entry_set_editable(GTK_ENTRY(entry1),FALSE);
+	gtk_container_add(GTK_CONTAINER(content_area), entry1);
+	gtk_container_add(GTK_CONTAINER(content_area), entry);
+
+	gtk_widget_show_all(dialog);
+	gint result = gtk_dialog_run(GTK_DIALOG(dialog));
+
+	char *old_name = (char *)malloc(MAXSZ); // variable for entered text
+	char *new_name = (char *)malloc(MAXSZ); // variable for entered text
+   
+	switch(result)
+	{
+		case 0:
+			old_name = (char *)gtk_entry_get_text(GTK_ENTRY(entry1));
+			new_name = (char *)gtk_entry_get_text(GTK_ENTRY(entry));
+
+			if(strlen(old_name) == 0 || old_name == NULL || strlen(new_name) == 0 || new_name == NULL)//Invalid entry
+			{
+				GtkWidget *popup_window;
+				GtkWidget *table;
+				GtkWidget *label;
+				GtkWidget *horiz_align;
+	
+				popup_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+				gtk_window_set_title (GTK_WINDOW (popup_window), "Input Error");
+				gtk_container_set_border_width (GTK_CONTAINER (popup_window), 10);
+				gtk_window_set_resizable (GTK_WINDOW (popup_window), FALSE);
+				gtk_window_set_decorated (GTK_WINDOW (popup_window), TRUE);
+				gtk_window_set_skip_taskbar_hint (GTK_WINDOW (popup_window), TRUE);
+				gtk_window_set_skip_pager_hint (GTK_WINDOW (popup_window), TRUE);
+				gtk_widget_set_size_request (popup_window, 250, 60);
+				gtk_window_set_transient_for (GTK_WINDOW (popup_window), GTK_WINDOW (app_state->window));
+				gtk_window_set_position (GTK_WINDOW (popup_window), GTK_WIN_POS_CENTER);
+		
+				gtk_widget_set_events (popup_window, GDK_FOCUS_CHANGE_MASK);
+				g_signal_connect (G_OBJECT (popup_window),
+		               			    "focus-out-event",
+		              		 G_CALLBACK (on_popup_focus_out),							NULL);
+				table = gtk_table_new (2,2,FALSE);
+				gtk_container_add(GTK_CONTAINER(popup_window),table);
+				label = gtk_label_new("\t\tInvalid filename!");
+
+				horiz_align = gtk_alignment_new(0,0,0,0);
+    	
+				gtk_container_add(GTK_CONTAINER(horiz_align),label);
+				gtk_table_attach(GTK_TABLE(table),horiz_align,1,2,0,1,GTK_FILL,GTK_FILL,0,0);
+	
+				gtk_widget_show_all (popup_window);
+				gtk_widget_grab_focus (popup_window);
+			}
+			else
+			{
+				sprintf(user_input,"!rename %s %s",old_name,new_name);
+				
+				gtk_entry_set_text(GTK_ENTRY(app_state->command),user_input); 
+				rename_cli(app_state,old_name,new_name);
+				gtk_entry_set_text(GTK_ENTRY(app_state->command),"Command"); 
+			}
+
+        		break;
+
+		case 1:
+			break;
+		default:
+			break;
+	}
+
+	gtk_widget_destroy(dialog);
+	return;
+}
+
+
+
+/* Rename file on server from list store */
+void rename_serv_func_list(GtkWidget *menuitem,Appstate *app_state)
+{
+	GtkTreeView *treeview = GTK_TREE_VIEW(app_state->view);
+	GtkTreeSelection *selection;
+	GtkTreeModel *model;
+	GtkTreeIter iter;
+	
+	GtkWidget *dialog;
+	GtkWidget *entry;
+	GtkWidget *entry1;
+	GtkWidget *content_area;
+
+	char user_input[MAXSZ];
+	char *filename = (char *)malloc(MAXSZ);
+
+	selection = gtk_tree_view_get_selection(treeview);
+	if(gtk_tree_selection_get_selected(selection,&model,&iter))
+	{	
+		gtk_tree_model_get(model,&iter,COL_NAME,&filename,-1);
+	}
+	
+	dialog = gtk_dialog_new_with_buttons("Rename File(Server)",GTK_WINDOW(app_state->window),GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,NULL,NULL,NULL,NULL);
+	gtk_window_set_default_size(GTK_WINDOW(dialog),350,130);
+	gtk_dialog_add_button(GTK_DIALOG(dialog), "Ok", 0);
+	gtk_dialog_add_button(GTK_DIALOG(dialog), "Cancel", 1);
+
+	content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+	entry = gtk_entry_new(); 
+	entry1 = gtk_entry_new();
+	gtk_entry_set_text(GTK_ENTRY(entry1),filename); 
+	gtk_entry_set_text(GTK_ENTRY(entry),"New name"); 
+	gtk_entry_set_editable(GTK_ENTRY(entry1),FALSE);
+	gtk_container_add(GTK_CONTAINER(content_area), entry1);
+	gtk_container_add(GTK_CONTAINER(content_area), entry);
+
+	gtk_widget_show_all(dialog);
+	gint result = gtk_dialog_run(GTK_DIALOG(dialog));
+
+	char *old_name = (char *)malloc(MAXSZ); // variable for entered text
+	char *new_name = (char *)malloc(MAXSZ); // variable for entered text
+   
+	switch(result)
+	{
+		case 0:
+			old_name = (char *)gtk_entry_get_text(GTK_ENTRY(entry1));
+			new_name = (char *)gtk_entry_get_text(GTK_ENTRY(entry));
+
+			if(strlen(old_name) == 0 || old_name == NULL || strlen(new_name) == 0 || new_name == NULL)//Invalid entry
+			{
+				GtkWidget *popup_window;
+				GtkWidget *table;
+				GtkWidget *label;
+				GtkWidget *horiz_align;
+	
+				popup_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+				gtk_window_set_title (GTK_WINDOW (popup_window), "Input Error");
+				gtk_container_set_border_width (GTK_CONTAINER (popup_window), 10);
+				gtk_window_set_resizable (GTK_WINDOW (popup_window), FALSE);
+				gtk_window_set_decorated (GTK_WINDOW (popup_window), TRUE);
+				gtk_window_set_skip_taskbar_hint (GTK_WINDOW (popup_window), TRUE);
+				gtk_window_set_skip_pager_hint (GTK_WINDOW (popup_window), TRUE);
+				gtk_widget_set_size_request (popup_window, 250, 60);
+				gtk_window_set_transient_for (GTK_WINDOW (popup_window), GTK_WINDOW (app_state->window));
+				gtk_window_set_position (GTK_WINDOW (popup_window), GTK_WIN_POS_CENTER);
+		
+				gtk_widget_set_events (popup_window, GDK_FOCUS_CHANGE_MASK);
+				g_signal_connect (G_OBJECT (popup_window),
+		               			    "focus-out-event",
+		              		 G_CALLBACK (on_popup_focus_out),							NULL);
+				table = gtk_table_new (2,2,FALSE);
+				gtk_container_add(GTK_CONTAINER(popup_window),table);
+				label = gtk_label_new("\t\tInvalid filename!");
+
+				horiz_align = gtk_alignment_new(0,0,0,0);
+    	
+				gtk_container_add(GTK_CONTAINER(horiz_align),label);
+				gtk_table_attach(GTK_TABLE(table),horiz_align,1,2,0,1,GTK_FILL,GTK_FILL,0,0);
+	
+				gtk_widget_show_all (popup_window);
+				gtk_widget_grab_focus (popup_window);
+			}
+			else
+			{
+				sprintf(user_input,"rename %s %s",old_name,new_name);
+				
+				gtk_entry_set_text(GTK_ENTRY(app_state->command),user_input); 
+				rename_serv(app_state,old_name,new_name);
+				gtk_entry_set_text(GTK_ENTRY(app_state->command),"Command"); 
+			}
+
+        		break;
+
+		case 1:
+			break;
+		default:
+			break;
+	}
+
+	gtk_widget_destroy(dialog);
+	return;
+}
+
+/* Download file from list store */
+void view_popup_menu_download(GtkWidget *menuitem, Appstate *app_state)
+{
+	GtkTreeView *treeview = GTK_TREE_VIEW(app_state->view);
+	GtkTreeSelection *selection;
+	GtkTreeModel *model;
+	GtkTreeIter iter;
+	
+	char user_input[MAXSZ];	
+	
+	char *filename = (char *)malloc(MAXSZ);
+	char *perm = (char *)malloc(MAXSZ);
+	
+	bzero(user_input,MAXSZ);
+	
+	selection = gtk_tree_view_get_selection(treeview);
+	if(gtk_tree_selection_get_selected(selection,&model,&iter))
+	{	
+		gtk_tree_model_get(model,&iter,COL_NAME,&filename,-1);
+		gtk_tree_model_get(model,&iter,COL_PERM,&perm,-1);
+		
+		if(perm[0] != '-')
+		{
+			GtkWidget *popup_window;
+			GtkWidget *table;
+			GtkWidget *label;
+			GtkWidget *horiz_align;
+	
+			/* Create window */
+			popup_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+			gtk_window_set_title (GTK_WINDOW (popup_window), "Error");
+			gtk_container_set_border_width (GTK_CONTAINER (popup_window), 10);
+			gtk_window_set_resizable (GTK_WINDOW (popup_window), FALSE);
+			gtk_window_set_decorated (GTK_WINDOW (popup_window), TRUE);
+			gtk_window_set_skip_taskbar_hint (GTK_WINDOW (popup_window), TRUE);
+			gtk_window_set_skip_pager_hint (GTK_WINDOW (popup_window), TRUE);
+			gtk_widget_set_size_request (popup_window, 350, 60);
+			gtk_window_set_transient_for (GTK_WINDOW (popup_window), GTK_WINDOW (app_state->window));
+			gtk_window_set_position (GTK_WINDOW (popup_window), GTK_WIN_POS_CENTER);
+
+			gtk_widget_set_events (popup_window, GDK_FOCUS_CHANGE_MASK);
+			g_signal_connect (G_OBJECT (popup_window),
+        		       			    "focus-out-event",
+              			 		    G_CALLBACK (on_popup_focus_out),
+                	   				NULL);
+	
+			table = gtk_table_new (2,2,FALSE);
+			gtk_container_add(GTK_CONTAINER(popup_window),table);
+			label = gtk_label_new("\tCannot download. Not a regular file!");
+
+			horiz_align = gtk_alignment_new(0,0,0,0);
+	    
+			gtk_container_add(GTK_CONTAINER(horiz_align),label);
+			gtk_table_attach(GTK_TABLE(table),horiz_align,1,2,0,1,GTK_FILL,GTK_FILL,0,0);
+	
+			gtk_widget_show_all (popup_window);
+			gtk_widget_grab_focus (popup_window);
+			
+		}	
+		
+		else
+		{
+			sprintf(user_input,"get %s",filename);
+			down_serv(app_state,user_input);	
+		}
+	}
+}
+ 
+/* Remove file on server from list store */ 
+void view_popup_menu_remove(GtkWidget *menuitem, Appstate *app_state)
+{
+	GtkTreeView *treeview = GTK_TREE_VIEW(app_state->view);
+	GtkTreeSelection *selection;
+	GtkTreeModel *model;
+	GtkTreeIter iter;
+
+	char user_input[MAXSZ];	
+	
+	char *filename = (char *)malloc(MAXSZ);
+	char *perm = (char *)malloc(MAXSZ);
+	
+	bzero(user_input,MAXSZ);
+
+	selection = gtk_tree_view_get_selection(treeview);
+	if(gtk_tree_selection_get_selected(selection,&model,&iter))
+	{	
+		gtk_tree_model_get(model,&iter,COL_NAME,&filename,-1);
+		gtk_tree_model_get(model,&iter,COL_PERM,&perm,-1);
+		
+		if(perm[0] != '-')
+		{
+			GtkWidget *popup_window;
+			GtkWidget *table;
+			GtkWidget *label;
+			GtkWidget *horiz_align;
+	
+			/* Create window */
+			popup_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+			gtk_window_set_title (GTK_WINDOW (popup_window), "Error");
+			gtk_container_set_border_width (GTK_CONTAINER (popup_window), 10);
+			gtk_window_set_resizable (GTK_WINDOW (popup_window), FALSE);
+			gtk_window_set_decorated (GTK_WINDOW (popup_window), TRUE);
+			gtk_window_set_skip_taskbar_hint (GTK_WINDOW (popup_window), TRUE);
+			gtk_window_set_skip_pager_hint (GTK_WINDOW (popup_window), TRUE);
+			gtk_widget_set_size_request (popup_window, 350, 60);
+			gtk_window_set_transient_for (GTK_WINDOW (popup_window), GTK_WINDOW (app_state->window));
+			gtk_window_set_position (GTK_WINDOW (popup_window), GTK_WIN_POS_CENTER);
+
+			gtk_widget_set_events (popup_window, GDK_FOCUS_CHANGE_MASK);
+			g_signal_connect (G_OBJECT (popup_window),
+        		       			    "focus-out-event",
+              			 		    G_CALLBACK (on_popup_focus_out),
+                	   				NULL);
+	
+			table = gtk_table_new (2,2,FALSE);
+			gtk_container_add(GTK_CONTAINER(popup_window),table);
+			label = gtk_label_new("\t  Cannot remove. Not a regular file!");
+
+			horiz_align = gtk_alignment_new(0,0,0,0);
+	    
+			gtk_container_add(GTK_CONTAINER(horiz_align),label);
+			gtk_table_attach(GTK_TABLE(table),horiz_align,1,2,0,1,GTK_FILL,GTK_FILL,0,0);
+	
+			gtk_widget_show_all (popup_window);
+			gtk_widget_grab_focus (popup_window);
+			
+		}	
+		else		
+ 		{
+			sprintf(user_input,"rm %s",filename);
+			serv_rmfile(app_state,user_input);	
+		}
+	}
+}
+ 
+/* Fill list store on client side */
+void new_func_cli(Appstate *app_state)
+{
+	GtkTreeIter    iter;
+	
+	struct stat file_buff;
+	fstat(app_state->temp_file_descriptor_cli,&file_buff);	
+
+	GtkTreeModel *model = gtk_tree_view_get_model(GTK_TREE_VIEW(app_state->view1));
+	if(file_buff.st_size > 0)
+	{
+		gtk_list_store_clear(GTK_LIST_STORE(model));
+		lseek(app_state->temp_file_descriptor_cli,app_state->seek_cli,0);
+		while(1)
+		{
+			char data[MAXSZ];
+			char ch[2];
+			char date[20];
+			char temp_val1[20];
+			char temp_val2[20];
+			char temp_val3[20];
+			char temp_val4[20];
+			char temp_val5[100];
+			char temp_val6[20];
+			char temp_val7[20];
+			char temp_val8[20];
+			char temp_val9[100];
+	
+			bzero(data,MAXSZ);
+	
+			int bytes;
+			int j = 0;
+	
+			while((bytes = read(app_state->temp_file_descriptor_cli,ch,1)) > 0)
+			{
+				if(ch[0] == '\n')
+					break;
+				data[j++] = ch[0];
+			}
+			data[j] = '\0';
+	
+			if(bytes == 0)
+				break;
+			sscanf(data,"%s %s %s %s %s %s %s %s %s",temp_val1,temp_val2,temp_val3,temp_val4,temp_val5,temp_val6,temp_val7,temp_val8,temp_val9);
+			strcpy(date,temp_val6);
+			strcat(date," ");
+			strcat(date,temp_val7);
+			strcat(date," ");
+			strcat(date,temp_val8);
+			/* Append a row and fill in some data */
+			gtk_list_store_append (GTK_LIST_STORE(model), &iter);
+			gtk_list_store_set (GTK_LIST_STORE(model), &iter,
+	        		              COL_PERM, temp_val1,
+	       			               COL_NAME, temp_val9,
+	        		              COL_SIZE, atoi(temp_val5),
+	        		              COL_MOD, date,
+        	        		      -1);
+		}
+		app_state->seek_cli = file_buff.st_size;
+	}
+	gtk_tree_view_set_model (GTK_TREE_VIEW(app_state->view1), model);
+}
+
+/* Fill list store on server side */
+void new_func(Appstate *app_state)
+{
+	GtkTreeIter    iter;
+	
+	struct stat file_buff;
+	fstat(app_state->temp_file_descriptor,&file_buff);	
+
+	GtkTreeModel *model = gtk_tree_view_get_model(GTK_TREE_VIEW(app_state->view));
+	if(file_buff.st_size > 0)
+	{
+		gtk_list_store_clear(GTK_LIST_STORE(model));
+		lseek(app_state->temp_file_descriptor,app_state->seek,0);
+		while(1)
+		{
+			char data[MAXSZ];
+			char ch[2];
+			char date[20];
+			char temp_val1[20];
+			char temp_val2[20];
+			char temp_val3[20];
+			char temp_val4[20];
+			char temp_val5[100];
+			char temp_val6[20];
+			char temp_val7[20];
+			char temp_val8[20];
+			char temp_val9[100];
+	
+			bzero(data,MAXSZ);
+	
+			int bytes;
+			int j = 0;
+	
+			while((bytes = read(app_state->temp_file_descriptor,ch,1)) > 0)
+			{
+				if(ch[0] == '\n')
+					break;
+				data[j++] = ch[0];
+			}
+			data[j] = '\0';
+	
+			if(bytes == 0)
+				break;
+			sscanf(data,"%s %s %s %s %s %s %s %s %s",temp_val1,temp_val2,temp_val3,temp_val4,temp_val5,temp_val6,temp_val7,temp_val8,temp_val9);
+			strcpy(date,temp_val6);
+			strcat(date," ");
+			strcat(date,temp_val7);
+			strcat(date," ");
+			strcat(date,temp_val8);
+			/* Append a row and fill in some data */
+			gtk_list_store_append (GTK_LIST_STORE(model), &iter);
+			gtk_list_store_set (GTK_LIST_STORE(model), &iter,
+	        		              COL_PERM, temp_val1,
+	       			               COL_NAME, temp_val9,
+	        		              COL_SIZE, atoi(temp_val5),
+	        		              COL_MOD, date,
+        	        		      -1);
+		}
+		app_state->seek = file_buff.st_size;
+	}
+	gtk_tree_view_set_model (GTK_TREE_VIEW(app_state->view), model);
+}
+
+/* Pop menu on client side in list store */
+void view_popup_menu_cli(GtkWidget *treeview, GdkEventButton *event, Appstate *app_state)
+{
+	GtkWidget *menu, *down, *delete, *rename;
+ 
+	GtkTreeModel *model = gtk_tree_view_get_model(GTK_TREE_VIEW(app_state->view1));
+	GtkTreeIter iter;
+
+	if(gtk_tree_model_get_iter_first(model,&iter) == TRUE)
+	{
+		menu = gtk_menu_new();
+ 
+		down = gtk_menu_item_new_with_label("Upload");
+		delete = gtk_menu_item_new_with_label("Remove file");
+		rename = gtk_menu_item_new_with_label("Rename");
+	 
+		g_signal_connect(down, "activate",(GCallback) view_popup_menu_upload_cli, app_state);
+		g_signal_connect(rename, "activate",(GCallback)view_popup_menu_rename_cli, app_state);
+		g_signal_connect(delete, "activate",(GCallback) view_popup_menu_remove_cli, app_state);
+	 
+		gtk_menu_shell_append(GTK_MENU_SHELL(menu), down);
+		gtk_menu_shell_append(GTK_MENU_SHELL(menu), delete);
+		gtk_menu_shell_append(GTK_MENU_SHELL(menu), rename);
+	 
+		gtk_widget_show_all(menu);
+ 
+	 	gtk_menu_popup(GTK_MENU(menu), NULL, NULL, NULL, NULL,(event != NULL) ? event->button : 0,gdk_event_get_time((GdkEvent*)event));
+	}
+}
+ 
+/* Action on pressing the button */ 
+gboolean view_onButtonPressed_cli(GtkWidget *treeview, GdkEventButton *event,Appstate *app_state)
+{
+	/* single click with the right mouse button? */
+	if (event->type == GDK_BUTTON_PRESS  &&  event->button == 3)
+	{
+		if (1)
+		{
+			GtkTreeSelection *selection;
+			selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+ 
+			if (gtk_tree_selection_count_selected_rows(selection)  <= 1)
+			{
+				GtkTreePath *path;
+ 
+				/* Get tree path for row that was clicked */
+				if (gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(treeview),(gint) event->x,(gint) event->y,&path, NULL, NULL, NULL))
+				{
+					gtk_tree_selection_unselect_all(selection);
+					gtk_tree_selection_select_path(selection, path);
+					gtk_tree_path_free(path);
+				}
+			}
+		} /* end of optional bit */
+ 
+	view_popup_menu_cli(treeview, event, app_state);
+ 
+	return TRUE; /* we handled this */
+	}
+ 
+	return FALSE; /* we did not handle this */
+}
+ 
+ 
+gboolean view_onPopupMenu_cli(GtkWidget *treeview, Appstate *app_state)
+{	
+	view_popup_menu_cli(treeview, NULL, app_state);
+ 
+	return TRUE; /* we handled this */
+} 
+ 
+/* Pop menu on server side in list store */
+void view_popup_menu (GtkWidget *treeview, GdkEventButton *event, Appstate *app_state)
+{
+	GtkWidget *menu, *down, *delete, *rename;
+ 
+	GtkTreeModel *model = gtk_tree_view_get_model(GTK_TREE_VIEW(app_state->view));
+	GtkTreeIter iter;
+
+	if(gtk_tree_model_get_iter_first(model,&iter) == TRUE)
+	{
+		menu = gtk_menu_new();
+ 
+		down = gtk_menu_item_new_with_label("Download");
+		delete = gtk_menu_item_new_with_label("Remove file");
+		rename = gtk_menu_item_new_with_label("Rename");
+	 
+		g_signal_connect(down, "activate",(GCallback) view_popup_menu_download, app_state);
+		g_signal_connect(rename, "activate",(GCallback)rename_serv_func_list, app_state);
+		g_signal_connect(delete, "activate",(GCallback) view_popup_menu_remove, app_state);
+	 
+		gtk_menu_shell_append(GTK_MENU_SHELL(menu), down);
+		gtk_menu_shell_append(GTK_MENU_SHELL(menu), delete);
+		gtk_menu_shell_append(GTK_MENU_SHELL(menu), rename);
+	 
+		gtk_widget_show_all(menu);
+ 
+	 	gtk_menu_popup(GTK_MENU(menu), NULL, NULL, NULL, NULL,(event != NULL) ? event->button : 0,gdk_event_get_time((GdkEvent*)event));
+	}
+}
+ 
+/* Action on pressing button */
+gboolean view_onButtonPressed (GtkWidget *treeview, GdkEventButton *event,Appstate *app_state)
+{
+	/* single click with the right mouse button? */
+	if (event->type == GDK_BUTTON_PRESS  &&  event->button == 3)
+	{
+		if (1)
+		{
+			GtkTreeSelection *selection;
+			selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+ 
+			if (gtk_tree_selection_count_selected_rows(selection)  <= 1)
+			{
+				GtkTreePath *path;
+ 
+				/* Get tree path for row that was clicked */
+				if (gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(treeview),(gint) event->x,(gint) event->y,&path, NULL, NULL, NULL))
+				{
+					gtk_tree_selection_unselect_all(selection);
+					gtk_tree_selection_select_path(selection, path);
+					gtk_tree_path_free(path);
+				}
+			}
+		} /* end of optional bit */
+ 
+	view_popup_menu(treeview, event, app_state);
+ 
+	return TRUE; /* we handled this */
+	}
+ 
+	return FALSE; /* we did not handle this */
+}
+ 
+ 
+gboolean view_onPopupMenu (GtkWidget *treeview, Appstate *app_state)
+{	
+	view_popup_menu(treeview, NULL, app_state);
+ 
+	return TRUE; /* we handled this */
+} 
+ 
+static GtkTreeModel *create_and_fill_model (void)
+{
+	GtkListStore  *store;
+	
+	store = gtk_list_store_new (NUM_COLS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_UINT, G_TYPE_STRING);
+
+	return GTK_TREE_MODEL (store);
+}
+
+/* Client side */
+static GtkWidget *create_view_and_model1 (Appstate *app_state)
+{
+	GtkCellRenderer     *renderer;
+	GtkTreeModel        *model;
+	GtkWidget           *view;
+ 
+	view = gtk_tree_view_new ();
+ 
+	g_signal_connect(view, "button-press-event", (GCallback) view_onButtonPressed_cli, app_state);
+	g_signal_connect(view, "popup-menu", (GCallback) view_onPopupMenu_cli, app_state);
+
+	renderer = gtk_cell_renderer_text_new ();
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view),
+        	                                       -1,      
+        	                                       "Permissions",  
+        	                                       renderer,
+        	                                       "text", COL_PERM,
+        	                                       NULL);
+ 
+ 
+	renderer = gtk_cell_renderer_text_new ();
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view),
+        	                                       -1,      
+        	                                       "Filename",  
+        	                                       renderer,
+        	                                       "text", COL_NAME,
+        	                                       NULL);
+ 	
+	renderer = gtk_cell_renderer_text_new ();
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view),
+                         	                      -1,      
+                         	                      "Filesize",  
+                         	                      renderer,
+        	                                       "text", COL_SIZE,
+			                               NULL);
+ 
+	renderer = gtk_cell_renderer_text_new ();
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view),
+	                                               -1,      
+	                                               "Last Modified",  
+	                                               renderer,
+	                                               "text", COL_MOD,
+	                                               NULL);
+	
+ 
+	model = create_and_fill_model ();
+ 
+	gtk_tree_view_set_model (GTK_TREE_VIEW (view), model);
+ 
+	/* The tree view has acquired its own reference to the
+	*  model, so we can drop ours. That way the model will
+	*  be freed automatically when the tree view is destroyed */
+ 
+	g_object_unref (model);
+ 
+	return view;
+}
+ 
+/* Server side */ 
+static GtkWidget *create_view_and_model (Appstate *app_state)
+{
+	GtkCellRenderer     *renderer;
+	GtkTreeModel        *model;
+	GtkWidget           *view;
+ 
+	view = gtk_tree_view_new ();
+ 
+	g_signal_connect(view, "button-press-event", (GCallback) view_onButtonPressed, app_state);
+	g_signal_connect(view, "popup-menu", (GCallback) view_onPopupMenu, app_state);
+
+	renderer = gtk_cell_renderer_text_new ();
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view),
+        	                                       -1,      
+        	                                       "Permissions",  
+        	                                       renderer,
+        	                                       "text", COL_PERM,
+        	                                       NULL);
+ 
+ 
+	renderer = gtk_cell_renderer_text_new ();
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view),
+        	                                       -1,      
+        	                                       "Filename",  
+        	                                       renderer,
+        	                                       "text", COL_NAME,
+        	                                       NULL);
+ 	
+	renderer = gtk_cell_renderer_text_new ();
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view),
+                         	                      -1,      
+                         	                      "Filesize",  
+                         	                      renderer,
+        	                                       "text", COL_SIZE,
+			                               NULL);
+ 
+	renderer = gtk_cell_renderer_text_new ();
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view),
+	                                               -1,      
+	                                               "Last Modified",  
+	                                               renderer,
+	                                               "text", COL_MOD,
+	                                               NULL);
+	
+ 
+	model = create_and_fill_model ();
+ 
+	gtk_tree_view_set_model (GTK_TREE_VIEW (view), model);
+ 
+	/* The tree view has acquired its own reference to the
+	*  model, so we can drop ours. That way the model will
+	*  be freed automatically when the tree view is destroyed */
+ 
+	g_object_unref (model);
+ 
+	return view;
+}
+ 
 /* Focus out popup window */
 gboolean on_popup_focus_out (GtkWidget *widget,GdkEventFocus *event,gpointer data)
 {
@@ -206,6 +1152,9 @@ void rmdir_cli(Appstate *app_state,char *user_input)
 		already_running(app_state);//Call popup window function
 		return;
 	}
+	
+	char cwd[MAXSZ];
+	bzero(cwd,MAXSZ);
 	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
@@ -222,6 +1171,9 @@ void rmdir_cli(Appstate *app_state,char *user_input)
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
+	getcwd(cwd,MAXSZ);
+	ls_l_dir_view(app_state,cwd);
+	new_func_cli(app_state);
 
 	return;
 }
@@ -241,6 +1193,10 @@ void rmdir_serv(Appstate *app_state,char *user_input)
 		return;
 	}
 	
+	char *address = (char *)malloc(MAXSZ);
+	
+	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
+	char *argv = address;	
 	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
@@ -261,19 +1217,18 @@ void rmdir_serv(Appstate *app_state,char *user_input)
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0 )
 	{
 		message_from_server[no_of_bytes] = '\0';
-		if(strncmp(message_from_server,"550",3) == 0)/* RMD fails*/
-		{
-			sprintf(buff,"Error: Removing directory failed.\n\n");
-		}
-		else
-			sprintf(buff,"%s\n",message_from_server);
+		sprintf(buff,"%s",message_from_server);
 		print_buff(app_state);
 				
 
 		if(strstr(message_from_server,"250 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
 			break;	
 	}
+	sprintf(buff,"\n");
+	print_buff(app_state);
 	
+	list_content_view(argv,"ls -l",app_state);	
+	new_func(app_state);
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
@@ -296,6 +1251,8 @@ void mkdir_cli(Appstate *app_state,char *user_input)
 		return;
 	}
 	
+	char cwd[MAXSZ];
+	bzero(cwd,MAXSZ);
 	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
@@ -309,6 +1266,9 @@ void mkdir_cli(Appstate *app_state,char *user_input)
 	
 	print_buff(app_state);
 	
+	getcwd(cwd,MAXSZ);
+	ls_l_dir_view(app_state,cwd);
+	new_func_cli(app_state);
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
@@ -400,6 +1360,8 @@ void rename_cli(Appstate *app_state,char *old_name, char *new_name)
 		close(new_fd);
 	}
 
+	ls_l_dir_view(app_state,cwd);	
+	new_func_cli(app_state);
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
@@ -430,6 +1392,10 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 	int temp = 0;
 	char message_to_server[MAXSZ];
 	char message_from_server[MAXSZ];
+	
+	char *address= (char *)malloc(MAXSZ);
+	
+	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 
 	bzero(message_from_server,MAXSZ);
 	bzero(message_to_server,MAXSZ);
@@ -477,22 +1443,19 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 		
 	{
 		message_from_server[no_of_bytes] = '\0';
-		if(strncmp(message_from_server,"550",3) == 0)/* RNTO fails*/
-		{
-			sprintf(buff,"Error: Renaming file failed.");
-		}
-		else
-			sprintf(buff,"%s",message_from_server);
+		sprintf(buff,"%s",message_from_server);
 		print_buff(app_state);
 				
 				
-		if(strstr(message_from_server,"553 ") > 0 ||strstr(message_from_server,"250 ") > 0 || strstr(message_from_server,"532 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"503 ") > 0)
+		if(strstr(message_from_server,"550 ") > 0 || strstr(message_from_server,"553 ") > 0 ||strstr(message_from_server,"250 ") > 0 || strstr(message_from_server,"532 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"503 ") > 0)
 			break;
 
 	}
 	sprintf(buff,"\n");
 	print_buff(app_state);
 	
+	list_content_view(address,"ls -l",app_state);	
+	new_func(app_state);
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
@@ -514,6 +1477,9 @@ void down_serv(Appstate *app_state,char *user_input)
 		already_running(app_state);//Call popup window function
 		return;
 	}
+
+	char cwd[MAXSZ];
+	bzero(cwd,MAXSZ);
 
 	char *address = (char *)malloc(MAXSZ);
 	
@@ -541,7 +1507,9 @@ void down_serv(Appstate *app_state,char *user_input)
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
-
+	getcwd(cwd,MAXSZ);
+	ls_l_dir_view(app_state,cwd);
+	new_func_cli(app_state);
 	return;
 }
 
@@ -567,6 +1535,11 @@ void serv_cd_dir(Appstate *app_state,char *user_input)
 
 	char message_to_server[MAXSZ];
 	char message_from_server[MAXSZ];
+	char *address = (char *)malloc(MAXSZ);
+	
+	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
+	char *argv = address;	
+	
 	bzero(message_to_server,MAXSZ);
 	bzero(message_from_server,MAXSZ);
 	
@@ -605,9 +1578,19 @@ void serv_cd_dir(Appstate *app_state,char *user_input)
 		if(strstr(message_from_server,"257 ") > 0 || strstr(message_from_server,"500 ") > 0 || strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
 			break;
 	}
+	if(message_from_server[strlen(message_from_server)-1] == '\n')
+		message_from_server[strlen(message_from_server) - 1] = '\0';
+	if(message_from_server[strlen(message_from_server)-1] == '\r')
+		message_from_server[strlen(message_from_server) - 1] = '\0';
+	if(message_from_server[strlen(message_from_server)-1] == '\"')
+		message_from_server[strlen(message_from_server) - 1] = '\0';
+	
+	gtk_entry_set_text(GTK_ENTRY(app_state->entry_dir),message_from_server + 5);
 	sprintf(buff,"\n");
 	print_buff(app_state);
 
+	list_content_view(argv,"ls -l",app_state);	
+	new_func(app_state);
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
@@ -652,7 +1635,10 @@ void cli_cd_dir(Appstate *app_state,char *user_input)
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
-
+	ls_l_dir_view(app_state,cwd);
+	new_func_cli(app_state);
+	gtk_entry_set_text(GTK_ENTRY(app_state->entry_dir_cli),cwd);
+		
 	return;
 }
 
@@ -695,7 +1681,8 @@ void cli_rmfile(Appstate *app_state,char *user_input)
 	}
 	
 	print_buff(app_state);
-
+	ls_l_dir_view(app_state,cwd);
+	new_func_cli(app_state);
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
@@ -793,6 +1780,9 @@ void serv_rmfile(Appstate *app_state,char *user_input)
 		return;
 	}
 
+	char *address = (char *)malloc(MAXSZ);
+	
+	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
@@ -812,12 +1802,7 @@ void serv_rmfile(Appstate *app_state,char *user_input)
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0 )
 	{
 		message_from_server[no_of_bytes] = '\0';
-		if(strncmp(message_from_server,"550",3) == 0)/* DEL fails*/
-		{
-			sprintf(buff,"Error: Removing file failed.\n\n");
-		}
-		else
-			sprintf(buff,"%s\n",message_from_server);
+		sprintf(buff,"%s\n",message_from_server);
 		print_buff(app_state);
 				
 		if(strstr(message_from_server,"250 ") > 0 || strstr(message_from_server,"450 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
@@ -828,6 +1813,8 @@ void serv_rmfile(Appstate *app_state,char *user_input)
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
+	list_content_view(address,"ls -l",app_state);	
+	new_func(app_state);
 
 	return;
 }
@@ -864,6 +1851,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 	char old_name[MAXSZ];
 	char new_name[MAXSZ];
 	char file_name[MAXSZ];
+	char cwd[MAXSZ];
 
 	char *home_dir= find_home_dir(argv);//Get home directory of user
 
@@ -878,6 +1866,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 	bzero(file_name,MAXSZ);
 	bzero(old_name,MAXSZ);
 	bzero(new_name,MAXSZ);
+	bzero(cwd,MAXSZ);
 
 	/* Read user input */
 	user_input = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->command));
@@ -928,6 +1917,10 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		}
 	
 		print_buff(app_state);
+		getcwd(cwd,MAXSZ);
+		ls_l_dir_view(app_state,cwd);
+		new_func_cli(app_state);
+		gtk_entry_set_text(GTK_ENTRY(app_state->entry_dir_cli),cwd);
 	
 	}
 
@@ -1008,12 +2001,22 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		}
 	
 		print_buff(app_state);
+		ls_l_dir_view(app_state,working_dir);
+		new_func_cli(app_state);
 
 	}
 	
 	/* Change directory on server side */
 	if(strncmp(user_input,"cd ",3) == 0)
 	{
+		char dir1[MAXSZ];
+		char dir2[MAXSZ];
+		char dir3[MAXSZ];
+	
+		bzero(dir1,MAXSZ);
+		bzero(dir2,MAXSZ);
+		bzero(dir3,MAXSZ);
+	
 		app_state->running = 1;
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 		sprintf(dir,"CWD %s\r\n",user_input + 3);
@@ -1033,6 +2036,29 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		}
 		sprintf(buff,"\n");
 		print_buff(app_state);
+		list_content_view(argv,"ls -l",app_state);	
+		new_func(app_state);
+		
+		/* Getting working directory to display after changing directory */
+		sprintf(message_to_server,"PWD\r\n");
+		
+		send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
+		
+		while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
+		{
+			message_from_server[no_of_bytes] = '\0';
+			if(strstr(message_from_server,"257 ") > 0 || strstr(message_from_server,"500 ") > 0 || strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
+				break;
+		}
+		
+		if(message_from_server[strlen(message_from_server)-1] == '\n')
+			message_from_server[strlen(message_from_server) - 1] = '\0';
+		if(message_from_server[strlen(message_from_server)-1] == '\r')
+			message_from_server[strlen(message_from_server) - 1] = '\0';
+		if(message_from_server[strlen(message_from_server)-1] == '\"')
+			message_from_server[strlen(message_from_server) - 1] = '\0';
+		
+		gtk_entry_set_text(GTK_ENTRY(app_state->entry_dir),message_from_server + 5);
 	
 	}
 	
@@ -1080,6 +2106,9 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
 		sprintf(buff,"Time taken %lf\n\n",cpu_time);
 		print_buff(app_state);
+		getcwd(cwd,MAXSZ);
+		ls_l_dir_view(app_state,cwd);
+		new_func_cli(app_state);
 	
 	}
 		
@@ -1094,6 +2123,8 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
 		sprintf(buff,"Time taken %lf\n\n",cpu_time);
 		print_buff(app_state);
+		list_content_view(argv,"ls -l",app_state);	
+		new_func(app_state);
 	}
 
 	/* Upload file uniquely to server */
@@ -1107,6 +2138,8 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
 		sprintf(buff,"Time taken %lf\n\n",cpu_time);
 		print_buff(app_state);
+		list_content_view(argv,"ls -l",app_state);	
+		new_func(app_state);
 	}
 		
 	/* Rename file on server */	
@@ -1124,6 +2157,8 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 			return;
 		}			
 		rename_serv(app_state,old_name,new_name);
+		list_content_view(argv,"ls -l",app_state);	
+		new_func(app_state);
 	}
 
 	/* Creating diectory on server */
@@ -1139,12 +2174,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0 )
 		{
 			message_from_server[no_of_bytes] = '\0';
-			if(strncmp(message_from_server,"550",3) == 0)/* MKD fails*/
-			{
-				sprintf(buff,"Error: Creating directory failed.\n\n");
-			}
-			else
-				sprintf(buff,"%s\n",message_from_server);
+			sprintf(buff,"%s",message_from_server);
 			print_buff(app_state);
 				
 
@@ -1152,12 +2182,18 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 				break;
 			
 		}	
+		sprintf(buff,"\n");
+		print_buff(app_state);
+		list_content_view(argv,"ls -l",app_state);	
+		new_func(app_state);
 	}
 
 	/* Removing directory on server */
 	if(strncmp(user_input,"rmdir ",6) == 0)
 	{	
 		rmdir_serv(app_state,user_input);
+		list_content_view(argv,"ls -l",app_state);	
+		new_func(app_state);
 	}
 		
 	/* Delete file on server */
@@ -1174,18 +2210,15 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0 )
 		{
 			message_from_server[no_of_bytes] = '\0';
-			if(strncmp(message_from_server,"550",3) == 0)/* DEL fails*/
-			{
-				sprintf(buff,"Error: Removing file failed.\n\n");
-			}
-			else
-				sprintf(buff,"%s\n",message_from_server);
+			sprintf(buff,"%s\n",message_from_server);
 			print_buff(app_state);
 				
 			if(strstr(message_from_server,"250 ") > 0 || strstr(message_from_server,"450 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
 				break;
 			
 		}
+		list_content_view(argv,"ls -l",app_state);	
+		new_func(app_state);
 	
 	}
 
@@ -1316,11 +2349,15 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 
 	char message_from_server[MAXSZ];/* message from server*/
 	char message_to_server[MAXSZ];/* message from server*/
+	char cwd[MAXSZ];
 	
 	bzero(message_from_server,MAXSZ);
 	bzero(message_to_server,MAXSZ);
+	bzero(cwd,MAXSZ);
 	bzero(buff,MAXSZ1);
 	
+	getcwd(cwd,MAXSZ);
+
 	if(app_state->running == 1)//Command running
 	{
 		close_func(widget,app_state);
@@ -1553,6 +2590,32 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	}
 	sprintf(buff,"\n");
 	print_buff(app_state);
+	list_content_view(argv,"ls -l",app_state);	
+	new_func(app_state);
+	ls_l_dir_view(app_state,".");	
+	new_func_cli(app_state);
+	
+	/* Getting working directory to display after changing directory */
+	sprintf(message_to_server,"PWD\r\n");
+	
+	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
+		
+	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
+	{
+		message_from_server[no_of_bytes] = '\0';
+		if(strstr(message_from_server,"257 ") > 0 || strstr(message_from_server,"500 ") > 0 || strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
+			break;
+	}
+	
+	if(message_from_server[strlen(message_from_server)-1] == '\n')
+		message_from_server[strlen(message_from_server) - 1] = '\0';
+	if(message_from_server[strlen(message_from_server)-1] == '\r')
+		message_from_server[strlen(message_from_server) - 1] = '\0';
+	if(message_from_server[strlen(message_from_server)-1] == '\"')
+		message_from_server[strlen(message_from_server) - 1] = '\0';
+		
+	gtk_entry_set_text(GTK_ENTRY(app_state->entry_dir),message_from_server + 5);
+	gtk_entry_set_text(GTK_ENTRY(app_state->entry_dir_cli),cwd);
 
 	return 1;
 }
@@ -1677,7 +2740,8 @@ void func_upload(GtkWidget *widget,Appstate *app_state)
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_file_button),"Upload");
 		/*Reset 'running' variable */
 		app_state->running = 0;
-		
+		list_content_view(argv,"ls -l",app_state);
+		new_func(app_state);		
 		cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
 		sprintf(buff,"Time taken %lf\n\n",cpu_time);
 		print_buff(app_state);
@@ -1730,6 +2794,10 @@ void mkdir_serv(Appstate *app_state,char *user_input)
 		return;
 	}
 	
+	char *address = (char *)malloc(MAXSZ);
+	
+	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
+	char *argv = address;	
 	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
@@ -1764,6 +2832,8 @@ void mkdir_serv(Appstate *app_state,char *user_input)
 			
 	}
 	
+	list_content_view(argv,"ls -l",app_state);	
+	new_func(app_state);
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
@@ -2868,11 +3938,26 @@ int main( int argc,char *argv[] )
 	Appstate app_state;
 	app_state.status = 0;
 	app_state.running = 0;
+	app_state.seek = 0;
+	app_state.seek_cli = 0;
+
+	app_state.temp_file_descriptor = mkstemp(temporary_file);
+	app_state.temp_file_descriptor_cli = mkstemp(temporary_file_cli);
+	
 	GtkWidget *table;
-	GtkWidget *label1;
-	GtkWidget *horiz_align1;
+	
 	GtkWidget *label;
 	GtkWidget *horiz_align;
+	GtkWidget *label1;
+	GtkWidget *horiz_align1;
+	GtkWidget *label2;
+	GtkWidget *horiz_align2;
+	GtkWidget *label3;
+	GtkWidget *horiz_align3;
+	GtkWidget *label4;
+	GtkWidget *horiz_align4;
+	GtkWidget *label5;
+	GtkWidget *horiz_align5;
 
 	GtkWidget *close_button;
 	GtkWidget *select_button;
@@ -2883,17 +3968,18 @@ int main( int argc,char *argv[] )
 	GtkWidget *quit, *quitmenu;//Quit menu
 	
 	GtkWidget *scrolled_window;
+	GtkWidget *scrolled_window1;
+	GtkWidget *scrolled_window2;
+
 	GtkAccelGroup *group;
 
-//	gdk_threads_init();
-//	gdk_threads_enter();
 	gtk_init (&argc, &argv);
 	GdkColor color;
 	gdk_color_parse("white smoke",&color);
 	
 	/* create a new window */
 	app_state.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-	gtk_widget_set_size_request( GTK_WIDGET (app_state.window), 660, 480);
+	gtk_widget_set_size_request( GTK_WIDGET (app_state.window), 660, 500);
 	gtk_window_set_resizable(GTK_WINDOW(app_state.window), TRUE);
 	gtk_window_set_title(GTK_WINDOW(app_state.window), "ST-FTP");
 	gtk_widget_modify_bg(app_state.window,GTK_STATE_NORMAL,&color);
@@ -2903,23 +3989,49 @@ int main( int argc,char *argv[] )
 
 	gtk_container_set_border_width (GTK_CONTAINER (app_state.window),10);
 
-	table = gtk_table_new (8,8,FALSE);
+	table = gtk_table_new (12,4,FALSE);
 	gtk_table_set_col_spacings(GTK_TABLE(table),0);
 	gtk_container_add(GTK_CONTAINER(app_state.window),table);
-	label = gtk_label_new("\nIP Address:\t\t\t          Username: \t\t\t\t     Password:");
+	
+	label = gtk_label_new("\nIP Address:");
 
 	horiz_align = gtk_alignment_new(0,0,0,0);
     
 	gtk_container_add(GTK_CONTAINER(horiz_align),label);
-	gtk_table_attach(GTK_TABLE(table),horiz_align,0,6,1,2,GTK_FILL,0,6,1);
+	gtk_table_attach(GTK_TABLE(table),horiz_align,0,1,1,2,GTK_FILL,0,1,1);
+	label4 = gtk_label_new("\nUsername");
+
+	horiz_align4 = gtk_alignment_new(0,0,0,0);
+    
+	gtk_container_add(GTK_CONTAINER(horiz_align4),label4);
+	gtk_table_attach(GTK_TABLE(table),horiz_align4,1,2,1,2,GTK_FILL,0,1,1);
+	label5 = gtk_label_new("\nPassword:");
+
+	horiz_align5 = gtk_alignment_new(0,0,0,0);
+    
+	gtk_container_add(GTK_CONTAINER(horiz_align5),label5);
+	gtk_table_attach(GTK_TABLE(table),horiz_align5,2,3,1,2,GTK_FILL,0,1,1);
 	
-	label1 = gtk_label_new("\nCommand/Response:");
+	label1 = gtk_label_new("\nClient:");
 
 	horiz_align1 = gtk_alignment_new(0,0,0,0);
     
 	gtk_container_add(GTK_CONTAINER(horiz_align1),label1);
-	gtk_table_attach(GTK_TABLE(table),horiz_align1,0,6,4,5,GTK_FILL,0,6,1);
+	gtk_table_attach(GTK_TABLE(table),horiz_align1,0,2,4,5,GTK_FILL,0,2,1);
+	
+	label3 = gtk_label_new("\nServer:");
 
+	horiz_align3 = gtk_alignment_new(0,0,0,0);
+    
+	gtk_container_add(GTK_CONTAINER(horiz_align3),label3);
+	gtk_table_attach(GTK_TABLE(table),horiz_align3,2,4,4,5,GTK_FILL,0,2,1);
+
+	label2 = gtk_label_new("\nCommand/Response:");
+
+	horiz_align2 = gtk_alignment_new(0,0,0,0);
+    
+	gtk_container_add(GTK_CONTAINER(horiz_align2),label2);
+	gtk_table_attach(GTK_TABLE(table),horiz_align2,0,4,8,9,GTK_FILL,0,4,1);
 	/* Menu bar */
 	group = gtk_accel_group_new();	
 	menubar = gtk_menu_bar_new ();
@@ -3004,7 +4116,19 @@ int main( int argc,char *argv[] )
 	gtk_menu_shell_append (GTK_MENU_SHELL (quitmenu), quit);
 	gtk_signal_connect(GTK_OBJECT(quit),"activate",GTK_SIGNAL_FUNC(close_func),&app_state);
 
-	gtk_table_attach(GTK_TABLE(table),menubar,0,6,0,1,GTK_FILL|GTK_EXPAND,0,6,1);
+	gtk_table_attach(GTK_TABLE(table),menubar,0,4,0,1,GTK_FILL|GTK_EXPAND,0,4,1);
+	
+	app_state.entry_dir = gtk_entry_new_with_max_length(1024);
+	gtk_entry_set_text (GTK_ENTRY (app_state.entry_dir),"Working directory");
+	gtk_entry_select_region (GTK_ENTRY (app_state.entry_dir),0, GTK_ENTRY(app_state.entry_dir)->text_length);
+
+	gtk_table_attach(GTK_TABLE(table),app_state.entry_dir,2,3,5,6,GTK_FILL,0,1,1);
+
+	app_state.entry_dir_cli = gtk_entry_new_with_max_length(1024);
+	gtk_entry_set_text (GTK_ENTRY (app_state.entry_dir_cli),"Working directory");
+	gtk_entry_select_region (GTK_ENTRY (app_state.entry_dir_cli),0, GTK_ENTRY(app_state.entry_dir_cli)->text_length);
+
+	gtk_table_attach(GTK_TABLE(table),app_state.entry_dir_cli,0,1,5,6,GTK_FILL,0,1,1);
 
 	/* IP Address */
 	app_state.entry = gtk_entry_new_with_max_length(20);
@@ -3023,61 +4147,72 @@ int main( int argc,char *argv[] )
 	gtk_entry_set_text (GTK_ENTRY (app_state.password),"Password");
 	gtk_entry_select_region (GTK_ENTRY (app_state.password),0, GTK_ENTRY(app_state.password)->text_length);
 	gtk_entry_set_visibility(GTK_ENTRY(app_state.password),FALSE);
-	gtk_table_attach(GTK_TABLE(table),app_state.password,2,3,2,3,GTK_FILL,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.password,2,3,2,3,GTK_FILL|GTK_EXPAND,0,1,1);
 
 	/* Command */
 	app_state.command = gtk_entry_new_with_max_length(1024);
 	gtk_entry_set_text (GTK_ENTRY (app_state.command),"Command");
 	gtk_entry_select_region (GTK_ENTRY (app_state.command),0, GTK_ENTRY(app_state.command)->text_length);
-	gtk_table_attach(GTK_TABLE(table),app_state.command,0,3,3,4,GTK_FILL,0,2,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.command,0,3,3,4,GTK_FILL,0,3,1);
     
 	/* Select file */
 	app_state.fileselect = gtk_entry_new_with_max_length(4096);
 	gtk_entry_set_text (GTK_ENTRY (app_state.fileselect),"Select file to upload");
 	gtk_entry_select_region (GTK_ENTRY (app_state.fileselect),0, GTK_ENTRY(app_state.fileselect)->text_length);
-	gtk_table_attach(GTK_TABLE(table),app_state.fileselect,0,3,6,7,GTK_FILL,0,2,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.fileselect,0,3,10,11,GTK_FILL,0,3,1);
     
 	/* Text view (Command and Response) */
 	app_state.text_view = gtk_text_view_new_with_buffer(buffer);                                    
 	gtk_text_view_set_buffer(GTK_TEXT_VIEW(app_state.text_view),buffer);
 	buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app_state.text_view));
-	gtk_text_buffer_set_text(buffer,"\t\t\t\t\t\t\t\t\tWelcome to ST-FTP!",strlen(buff));
+	gtk_text_buffer_set_text(buffer,"Welcome!",strlen(buff));
 
-	/* Scrolling window */
 	scrolled_window = gtk_scrolled_window_new(NULL, NULL);              
 	gtk_container_add(GTK_CONTAINER(scrolled_window), app_state.text_view);       
-	gtk_table_attach(GTK_TABLE(table),scrolled_window,0,6,5,6,GTK_FILL,GTK_FILL|GTK_EXPAND,6,1);
+	gtk_table_attach(GTK_TABLE(table),scrolled_window,0,4,9,10,GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,4,1);
+  
+	/* List store for server files*/
+	app_state.view = create_view_and_model (&app_state);
+	scrolled_window1 = gtk_scrolled_window_new(NULL, NULL);              
+	gtk_container_add(GTK_CONTAINER(scrolled_window1),app_state.view);       
+	gtk_table_attach(GTK_TABLE(table),scrolled_window1,2,4,6,7,GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,2,1);
+  
 
+	/* List store for server files*/
+	app_state.view1 = create_view_and_model1 (&app_state);
+	scrolled_window2 = gtk_scrolled_window_new(NULL, NULL);              
+	gtk_container_add(GTK_CONTAINER(scrolled_window2),app_state.view1);       
+	gtk_table_attach(GTK_TABLE(table),scrolled_window2,0,2,6,7,GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,2,1);
+  
 	/* Connect button */
 	app_state.button = gtk_button_new_with_label("Connect");
 	gtk_signal_connect(GTK_OBJECT(app_state.button), "clicked",GTK_SIGNAL_FUNC(connect_func),&app_state);
 	gtk_widget_set_size_request(app_state.button,BUTTON_WIDTH,BUTTON_HEIGHT);
-	gtk_table_attach(GTK_TABLE(table),app_state.button,3,6,2,3,GTK_FILL,0,3,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.button,3,4,2,3,GTK_FILL,0,1,1);
 
 	/* Run button */
 	app_state.ok_button = gtk_button_new_with_label("Run");
 	gtk_signal_connect(GTK_OBJECT(app_state.ok_button), "clicked",GTK_SIGNAL_FUNC(run_command),&app_state);
 	gtk_widget_set_size_request(app_state.ok_button,BUTTON_WIDTH,BUTTON_HEIGHT);
-	gtk_table_attach(GTK_TABLE(table),app_state.ok_button,3,6,3,4,GTK_FILL,0,3,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.ok_button,3,4,3,4,GTK_FILL,0,1,1);
 
 	/* Select button */
 	select_button = gtk_button_new_with_label("Select");
 	gtk_signal_connect(GTK_OBJECT(select_button), "clicked",GTK_SIGNAL_FUNC(file_select),&app_state);
 	gtk_widget_set_size_request(select_button,BUTTON_WIDTH,BUTTON_HEIGHT);
-	gtk_table_attach(GTK_TABLE(table),select_button,3,6,6,7,GTK_FILL,0,3,1);
+	gtk_table_attach(GTK_TABLE(table),select_button,3,4,10,11,GTK_FILL,0,1,1);
 	
 	/* Upload button */
 	app_state.ok_file_button = gtk_button_new_with_label("Upload");
 	gtk_signal_connect(GTK_OBJECT(app_state.ok_file_button), "clicked",GTK_SIGNAL_FUNC(func_upload),&app_state);
 	gtk_widget_set_size_request(app_state.ok_file_button,BUTTON_WIDTH,BUTTON_HEIGHT);
-	gtk_table_attach(GTK_TABLE(table),app_state.ok_file_button,3,6,7,8,GTK_FILL|GTK_EXPAND,0,3,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.ok_file_button,3,4,11,12,GTK_EXPAND|GTK_FILL,0,1,1);
 	
 	gtk_window_add_accel_group (GTK_WINDOW (app_state.window), group);
 
 	gtk_widget_show_all(app_state.window);
 
 	gtk_main();
-//	gdk_threads_leave();
 	
 	return 0;
 }
