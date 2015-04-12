@@ -1,4 +1,4 @@
-#                               Multithreaded FTP client program in C                                               
+#                               Multisegmented FTP client program in C                                               
 Apart from all functionalities of standard FTP, the important thing on which I have worked is to increase the downloading speed of very large files using multithreading(used `POSIX` threads).                                 
 For very large files, multiple threads are created and each thread creates an `instruction connection` and `data connection` with the server. Each thread downloads a specific chunk of data and then all are combined together to get the file.                                                                                                             
 #Note:
