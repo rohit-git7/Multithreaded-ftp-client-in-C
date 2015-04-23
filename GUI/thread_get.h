@@ -161,7 +161,7 @@ void *function(void *point)
 				break;
 		}
 		
-		sprintf(file_home_dir,"%s/%s%d",obj->home_dir,file,obj->t_id);
+		sprintf(file_home_dir,"%s%d",file,obj->t_id);
 		
 		/* Create file on client system */	
 		fd = open(file_home_dir,O_CREAT|O_WRONLY|O_TRUNC,0644);			

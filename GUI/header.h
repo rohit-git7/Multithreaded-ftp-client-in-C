@@ -16,6 +16,7 @@
 #include<pthread.h>
 #include<errno.h>
 #include<glib.h>
+#include<netdb.h>
 
 #define PORT 21
 #define MAXSZ 4096
@@ -26,7 +27,7 @@
 #define MIN_IP 0
 #define MAX_IP 255
 
-#define BUTTON_WIDTH 70
+#define BUTTON_WIDTH 95
 #define BUTTON_HEIGHT 30
 
 char user[MAXSZ];/* user details sent to server */
@@ -72,4 +73,18 @@ struct userdetails
 	Appstate app_state;
 };
 
+
+char temporary_file[]="/tmp/myTMP-XXXXXX";//Temporary file to store file names on server
+char temporary_file_cli[]="/tmp/myTMPcli-XXXXXX";//Temporary file to store file names on client
+
+enum
+{
+	COL_PERM = 0,
+	COL_NAME,
+	COL_SIZE,
+	COL_MOD,
+	NUM_COLS
+};
+
+extern int h_errno;
 

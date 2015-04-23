@@ -57,7 +57,7 @@ void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
 			break;
 	}
 	
-	size = atoi(message_from_server + 4);/* Convertin string to integer */
+	size = atoi(message_from_server + 4);/* Converting string to integer */
 
 	/* Getting current working dirctory */
 	send(app_state->sockfd,"PWD\r\n",5,0);
@@ -179,7 +179,7 @@ void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
 			sprintf(file_home_dir,"%s/%s",home_dir,file);
 		
 			/* Create file on client system */	
-			filehandle = open(file_home_dir,O_CREAT|O_WRONLY|O_TRUNC,0644);			
+			filehandle = open(file,O_CREAT|O_WRONLY|O_TRUNC,0644);			
 			
 			/* Decide total number of threads to be created */
 			if(size <= 5000)
@@ -241,8 +241,8 @@ void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
 						break;
 					while(gtk_events_pending())
 						gtk_main_iteration();
-					sprintf(temp_file,"%s/%s%d",home_dir,user_input + 4,i);
-					if(lstat(temp_file,&file_buff)== -1)
+					sprintf(temp_file,"%s%d",user_input + 4,i);
+					if(lstat(temp_file,&file_buff) == -1)
 						continue;
 						
 					if(i < (no_of_threads -1))
@@ -280,7 +280,7 @@ void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
 	
 				for(i = 0; i < no_of_threads; i++)//Joining temporary files
 				{
-					sprintf(temp_file,"%s/%s%d",home_dir,user_input + 4,i);
+					sprintf(temp_file,"%s%d",user_input + 4,i);
 					fd = open(temp_file,O_RDONLY);
 						
 					while((no_of_bytes = read(fd,data,MAXSZ)) > 0)

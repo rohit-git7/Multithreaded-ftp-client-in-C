@@ -92,7 +92,7 @@ void list_content(char *arg, char *user_input, Appstate *app_state)
 			print_buff(app_state);
 	
 			
-			if(strstr(message_from_server,"425 ") > 0|| strstr(message_from_server,"125 ") > 0||strstr(message_from_server,"150 ") > 0 || strstr(message_from_server,"501 ") > 0 ||strstr(message_from_server,"500 ") > 0 ||strstr(message_from_server,"502 ") > 0 ||strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"530 ") > 0)
+			if(strstr(message_from_server,"550 ") > 0||strstr(message_from_server,"425 ") > 0|| strstr(message_from_server,"125 ") > 0||strstr(message_from_server,"150 ") > 0 || strstr(message_from_server,"501 ") > 0 ||strstr(message_from_server,"500 ") > 0 ||strstr(message_from_server,"502 ") > 0 ||strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"530 ") > 0)
 				break;
 		}
 		sprintf(buff,"\n");

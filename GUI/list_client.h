@@ -239,7 +239,7 @@ void ls_l_dir_view(Appstate *app_state,char *dir_name)
 	while((entry = readdir(fd))!= NULL)/* Read directory */
 	{
 		
-	    	if(entry->d_name[0] != '.' || strcmp(entry->d_name,"..") == 0)
+	    	if(entry->d_name[0] != '.')
  		{
 			*(arg + i) = entry->d_name;
 			i++;
