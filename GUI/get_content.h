@@ -271,7 +271,7 @@ void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
 					message_from_server[no_of_bytes] = '\0';
 					while(gtk_events_pending())
 						gtk_main_iteration();
-					if(strstr(message_from_server,"451 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"226 ") > 0 || strstr(message_from_server,"426 ") > 0)
+					if(strstr(message_from_server,"450 ") > 0 ||strstr(message_from_server,"451 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"226 ") > 0 || strstr(message_from_server,"426 ") > 0)
 						break;
 				}		
 			
@@ -294,6 +294,7 @@ void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
                 	        			partial_bytes = write(filehandle,data + total,no_of_bytes - total);
 							total += partial_bytes;
 						}
+						bzero(data,MAXSZ);
 					}
 					close(fd);
 					unlink(temp_file);

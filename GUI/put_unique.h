@@ -10,14 +10,11 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 	int fd;	
 	int p;
 	int total;
-	int size;
 	
 	struct timeval tm;/* time structure to set time wait for receive buffer */
 	tm.tv_sec = 1;
 	tm.tv_usec = 750000;
 	
-	struct stat file_buff;
-
 	char message_from_server[MAXSZ];
 	char message_to_server[MAXSZ];
 	char file[MAXSZ];// File name
@@ -81,7 +78,6 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 	
 		/* Connect to server using another PORT for file transfers */
 		newsockfd = func_to_connect_passive(arg,port);
-		fcntl(newsockfd,F_SETFL,FNDELAY);
 		
 		/* Send file name to server */
 		sprintf(file_name,"STOU %s\r\n",user_input + 8);	
@@ -108,22 +104,21 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 			sprintf(file,"%s",user_input + 8);
 
 			fd = open(file,O_RDONLY);
-			fstat(fd,&file_buff);
-			size = (int)file_buff.st_size;
-			while(size > 0)
+		
+			while((no_of_bytes = read(fd,data,MAXSZ)) > 0)
 			{
-				no_of_bytes = read(fd,data,MAXSZ);
 				total = 0;
 				while(total < no_of_bytes)
                 		{
-					while(gtk_events_pending())
-						gtk_main_iteration();
                 		        p = send(newsockfd,data + total,no_of_bytes - total,0);
                        			 total += p;
+					while(gtk_events_pending())
+						gtk_main_iteration();
 				}
-				size -= no_of_bytes;
+				bzero(data,MAXSZ);
 			}
 					
+			close(fd);
 			close(newsockfd);
 			/* Set time boundation on receive buffer */
 			setsockopt(app_state->sockfd, SOL_SOCKET, SO_RCVTIMEO,(char *)&tm,sizeof(tm));

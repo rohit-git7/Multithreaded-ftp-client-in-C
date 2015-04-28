@@ -87,4 +87,17 @@ enum
 };
 
 extern int h_errno;
+int drag_same_side = 0;
+static const GtkTargetEntry drag_targets = { 
+	"STRING", GTK_TARGET_SAME_APP,0
+};
+ 
+static guint n_targets = 1;
 
+struct DATA
+{
+	char *perm;
+	char *name;
+	char *size;
+	char *date;
+};

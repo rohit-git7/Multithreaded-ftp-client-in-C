@@ -11,17 +11,315 @@
 
 void no_connection(Appstate *);
 void already_running(Appstate *);
+void upload_cli(Appstate *, char *);	
 void serv_cd_dir(Appstate *, char *);	
 void cli_cd_dir(Appstate *, char *);	
-void cli_rmfile(Appstate *, char *);	
-void serv_rmfile(Appstate *, char *);	
 void down_serv(Appstate *,char *);
+void move_up_dir(GtkWidget *,Appstate *);
+void move_up_dir_cli(GtkWidget *,Appstate *);
 void rename_serv_func(GtkWidget *,Appstate *);
 void rename_cli(Appstate *,char *,char *);
 void rename_serv(Appstate *,char *,char *);
-gboolean on_popup_focus_out (GtkWidget *,GdkEventFocus *,gpointer data);
 void new_func(Appstate *);
 void new_func_cli(Appstate *);
+gboolean on_popup_focus_out(GtkWidget *,GdkEventFocus *,gpointer data);
+gboolean foreach_func(GtkTreeModel *,GtkTreePath *, GtkTreeIter *, gpointer);
+void on_drag_data_get_serv(GtkWidget *,GdkDragContext *,GtkSelectionData *, guint , guint ,gpointer );
+void on_drag_data_received_cli(GtkWidget *, GdkDragContext *,gint , gint , GtkSelectionData *, guint ,guint , Appstate *);
+void on_drag_data_get_cli(GtkWidget *,GdkDragContext *,GtkSelectionData *, guint , guint ,gpointer );
+void on_drag_data_received_serv(GtkWidget *, GdkDragContext *,gint , gint , GtkSelectionData *, guint ,guint , Appstate *);
+void view_popup_menu_upload_cli(GtkWidget *, Appstate *);
+void view_popup_menu_remove_cli(GtkWidget *, Appstate *);
+void view_popup_menu_change_dir_cli(GtkWidget *, Appstate *);
+void view_popup_menu_rename_cli(GtkWidget *, Appstate *);
+void rename_serv_func_list(GtkWidget *,Appstate *);
+void view_popup_menu_download(GtkWidget *, Appstate *);
+void view_popup_menu_change_dir(GtkWidget *, Appstate *);
+void view_popup_menu_remove(GtkWidget *, Appstate *);
+void view_popup_menu_cli(GtkWidget *, GdkEventButton *, Appstate *);
+void view_popup_menu(GtkWidget *, GdkEventButton *, Appstate *);
+gboolean view_onPopupMenu_cli(GtkWidget *, Appstate *);
+gboolean view_onPopupMenu(GtkWidget *, Appstate *);
+gboolean view_onButtonPressed(GtkWidget *, GdkEventButton *,Appstate *);
+gboolean view_onButtonPressed_cli(GtkWidget *, GdkEventButton *,Appstate *);
+static GtkTreeModel *create_and_fill_model();
+static GtkWidget *create_view_and_model1(Appstate *);
+static GtkWidget *create_view_and_model(Appstate *);
+void help_func(GtkWidget *,Appstate *);
+void about_us_func(GtkWidget *,Appstate *);
+void rmdir_cli(Appstate *,char *);
+void rmdir_serv(Appstate *,char *);
+void mkdir_cli(Appstate *,char *);
+void serv_cd_dir(Appstate *,char *);
+void cli_cd_dir(Appstate *,char *);
+void cli_rmfile(Appstate *, char *);	
+void ls_cli_func(GtkWidget *,Appstate *);
+void ls_ser_func(GtkWidget *,Appstate *);
+void serv_rmfile(Appstate *, char *);	
+void run_command(GtkWidget *, Appstate *);
+void close_func(GtkWidget *, Appstate *);
+int validate_ip(char *);
+int connect_func(GtkWidget *, Appstate *);
+GdkPixbuf *create_pixbuf(const gchar *);
+void func_upload(GtkWidget *,Appstate *);
+void file_select(GtkWidget *, Appstate *);
+void mkdir_serv(Appstate *,char *);
+void crdir_cli_func(GtkWidget *,Appstate *);
+void rmdir_cli_func(GtkWidget *,Appstate *);
+void rename_serv_func(GtkWidget *,Appstate *);
+void crdir_serv_func(GtkWidget *,Appstate *);
+void rmdir_serv_func(GtkWidget *,Appstate *);
+void rename_cli_func(GtkWidget *,Appstate *);
+void down_serv_func(GtkWidget *,Appstate *);
+void cddir_cli_func(GtkWidget *,Appstate *);
+void cddir_serv_func(GtkWidget *,Appstate *);
+void pwd_cli_func(GtkWidget *,Appstate *);
+void pwd_serv_func(GtkWidget *,Appstate *);
+void rmfile_cli_func(GtkWidget *,Appstate *);
+void rmfile_serv_func(GtkWidget *,Appstate *);
+char *find_home_dir(char *);
+ 
+/*Get home directory of user executing program */
+char *find_home_dir(char *file)
+{
+	struct passwd *pw;
+	char *sudo_uid = getenv("SUDO_UID");
+	pw = getpwuid(atoi(sudo_uid));
+	
+	return pw->pw_dir;
+
+}
+
+
+gboolean foreach_func(GtkTreeModel *model,GtkTreePath  *path, GtkTreeIter  *iter, gpointer user_data)
+{
+	gchar *col1, *col2, *col3,*col4,*tree_path_str;
+
+	gtk_tree_model_get (model, iter,
+			COL_PERM, &col1,
+                        COL_NAME, &col2,
+                        COL_SIZE, &col3,
+                        COL_MOD, &col4,
+                        -1);
+
+	tree_path_str = gtk_tree_path_to_string(path);
+
+	if(strcmp(user_data,col2) == 0)
+	{
+		drag_same_side = 1;
+		return TRUE;
+	}
+	
+	if(strlen(col1) == 0)
+		return TRUE;
+
+	g_free(tree_path_str);
+
+	g_free(col1); 
+	g_free(col4); 
+	g_free(col2); 
+	g_free(col3); 
+
+	return FALSE; 
+}
+
+/* User callback for "getting" the data out of the row that was DnD'd */
+void on_drag_data_get_serv(GtkWidget *widget,GdkDragContext *drag_context,GtkSelectionData *sdata, guint info, guint time,gpointer user_data)
+{
+	GtkTreeIter iter;
+	GtkTreeModel *list_store;
+	GtkTreeSelection *selector;
+	gboolean rv;
+ 
+	/* Get the selector widget from the treeview in question */
+	selector = gtk_tree_view_get_selection(GTK_TREE_VIEW(widget));
+ 
+	/* Get the tree model (list_store) and initialise the iterator */
+	rv = gtk_tree_selection_get_selected(selector,&list_store,&iter);
+ 
+	/* This shouldn't really happen, but just in case */
+	if(rv == FALSE){
+		return;
+	}
+ 
+	/* Always initialise a GValue with 0 */
+	GValue value={0,};
+	char *cptr;
+ 
+	/* Allocate a new row to send off to the other side */
+	struct DATA *temp = malloc(sizeof(struct DATA));
+ 
+	/* Go through the columns */
+ 
+	/* Get the GValue of a particular column from the row, the iterator currently points to*/
+	gtk_tree_model_get_value(list_store,&iter,COL_PERM,&value);
+	cptr = (char*) g_value_get_string(&value);
+	temp->perm = malloc(strlen(cptr)*sizeof(char)+1);
+	strcpy(temp->perm,cptr);
+	g_value_unset(&value);
+ 
+	gtk_tree_model_get_value(list_store,&iter,COL_NAME,&value);
+	cptr = (char*)g_value_get_string(&value);
+	temp->name = malloc(strlen(cptr)*sizeof(char)+1);
+	strcpy(temp->name,cptr);
+	g_value_unset(&value);
+ 
+	gtk_tree_model_get_value(list_store,&iter,COL_SIZE,&value);
+	cptr = (char*)g_value_get_string(&value);
+	temp->size = malloc(strlen(cptr)*sizeof(char)+1);
+	strcpy(temp->size,cptr);
+	g_value_unset(&value);
+ 
+	gtk_tree_model_get_value(list_store,&iter,COL_MOD,&value);
+	cptr = (char*)g_value_get_string(&value);
+	temp->date = malloc(strlen(cptr)*sizeof(char)+1);
+	strcpy(temp->date,cptr);
+	g_value_unset(&value);
+ 
+	/* Send the data off into the GtkSelectionData object */
+	gtk_selection_data_set(sdata,
+		gdk_atom_intern ("struct DATA pointer", FALSE),
+		16,		/* Tell GTK how to pack the data (bytes) */
+		(void *)&temp,  /* The actual pointer that we just made */
+		sizeof (temp)); /* The size of the pointer */
+ 
+}
+ 
+/* User callback for putting the data into the other treeview */
+void on_drag_data_received_cli(GtkWidget *widget, GdkDragContext *drag_context,gint x, gint y, GtkSelectionData *sdata, guint info,guint time, Appstate *app_state)
+{
+ 
+	/* Now add to the other treeview */
+	GtkTreeModel *list_store;
+	list_store = gtk_tree_view_get_model(GTK_TREE_VIEW(widget));
+	
+	char user_input[MAXSZ];
+
+	bzero(user_input,MAXSZ);
+
+	/* Copy the pointer we received into a new struct */
+	struct DATA *temp = NULL;
+	memcpy (&temp, sdata->data, sizeof (temp));
+	
+	gtk_tree_model_foreach(list_store,foreach_func,temp->name);
+
+	if(drag_same_side == 1)
+	{
+		drag_same_side = 0;
+		return;
+	}
+	
+	sprintf(user_input,"get %s",temp->name);
+
+	if(temp->perm[0] == '-')
+	{	gtk_entry_set_text(GTK_ENTRY(app_state->command),user_input); 
+		down_serv(app_state,user_input);
+	    	gtk_entry_set_text(GTK_ENTRY(app_state->command),"Command"); 
+	}
+	else
+		return;
+
+}
+
+
+/* User callback for "getting" the data out of the row that was DnD'd */
+void on_drag_data_get_cli(GtkWidget *widget,GdkDragContext *drag_context,GtkSelectionData *sdata, guint info, guint time,gpointer user_data)
+{
+	GtkTreeIter iter;
+	GtkTreeModel *list_store;
+	GtkTreeSelection *selector;
+	gboolean rv;
+ 
+	/* Get the selector widget from the treeview in question */
+	selector = gtk_tree_view_get_selection(GTK_TREE_VIEW(widget));
+ 
+	/* Get the tree model (list_store) and initialise the iterator */
+	rv = gtk_tree_selection_get_selected(selector,&list_store,&iter);
+ 
+	/* This shouldn't really happen, but just in case */
+	if(rv == FALSE){
+		return;
+	}
+ 
+	/* Always initialise a GValue with 0 */
+	GValue value={0,};
+	char *cptr;
+ 
+	/* Allocate a new row to send off to the other side */
+	struct DATA *temp = malloc(sizeof(struct DATA));
+ 
+	/* Go through the columns */
+ 
+	/* Get the GValue of a particular column from the row, the iterator currently points to*/
+	gtk_tree_model_get_value(list_store,&iter,COL_PERM,&value);
+	cptr = (char*) g_value_get_string(&value);
+	temp->perm = malloc(strlen(cptr)*sizeof(char)+1);
+	strcpy(temp->perm,cptr);
+	g_value_unset(&value);
+ 
+	gtk_tree_model_get_value(list_store,&iter,COL_NAME,&value);
+	cptr = (char*)g_value_get_string(&value);
+	temp->name = malloc(strlen(cptr)*sizeof(char)+1);
+	strcpy(temp->name,cptr);
+	g_value_unset(&value);
+ 
+	gtk_tree_model_get_value(list_store,&iter,COL_SIZE,&value);
+	cptr = (char*)g_value_get_string(&value);
+	temp->size = malloc(strlen(cptr)*sizeof(char)+1);
+	strcpy(temp->size,cptr);
+	g_value_unset(&value);
+ 
+	gtk_tree_model_get_value(list_store,&iter,COL_MOD,&value);
+	cptr = (char*)g_value_get_string(&value);
+	temp->date = malloc(strlen(cptr)*sizeof(char)+1);
+	strcpy(temp->date,cptr);
+	g_value_unset(&value);
+ 
+	/* Send the data off into the GtkSelectionData object */
+	gtk_selection_data_set(sdata,
+		gdk_atom_intern ("struct DATA pointer", FALSE),
+		16,		/* Tell GTK how to pack the data (bytes) */
+		(void *)&temp,  /* The actual pointer that we just made */
+		sizeof (temp)); /* The size of the pointer */
+ 
+}
+ 
+/* User callback for putting the data into the other treeview */
+void on_drag_data_received_serv(GtkWidget *widget, GdkDragContext *drag_context,gint x, gint y, GtkSelectionData *sdata, guint info,guint time, Appstate *app_state)
+{
+ 
+	/* Now add to the other treeview */
+	GtkTreeModel *list_store;
+	list_store = gtk_tree_view_get_model(GTK_TREE_VIEW(widget));
+	
+	char user_input[MAXSZ];
+
+	bzero(user_input,MAXSZ);
+	
+	/* Copy the pointer we received into a new struct */
+	struct DATA *temp = NULL;
+	memcpy (&temp, sdata->data, sizeof (temp));
+	
+	gtk_tree_model_foreach(list_store,foreach_func,temp->name);
+
+	if(drag_same_side == 1)
+	{
+		drag_same_side = 0;
+		return;
+	}
+
+	sprintf(user_input,"uniqput %s",temp->name);
+	
+	if(temp->perm[0] == '-')
+	{
+		gtk_entry_set_text(GTK_ENTRY(app_state->command),user_input); 
+		upload_cli(app_state,user_input);
+		gtk_entry_set_text(GTK_ENTRY(app_state->command),"Command"); 
+	}
+	else
+		return;
+	
+}
 
 void move_up_dir_cli(GtkWidget *widget, Appstate *app_state)
 {
@@ -67,11 +365,10 @@ void upload_cli(Appstate *app_state,char *user_input)
 		return;
 	}
 
-	char *address = (char *)malloc(MAXSZ);
+	char *argv = (char *)malloc(MAXSZ);
 	
 	/* Get IP Address of server from IP Address entry */
-	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
-	char *argv = address;	
+	argv = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 
 	clock_t start;
 	clock_t end;
@@ -782,7 +1079,7 @@ void new_func_cli(Appstate *app_state)
 			gtk_list_store_set (GTK_LIST_STORE(model), &iter,
 	        		              COL_PERM, temp_val1,
 	       			               COL_NAME, temp_val9,
-	        		              COL_SIZE, atoi(temp_val5),
+	        		              COL_SIZE, temp_val5,
 	        		              COL_MOD, date,
         	        		      -1);
 		}
@@ -847,7 +1144,7 @@ void new_func(Appstate *app_state)
 			gtk_list_store_set (GTK_LIST_STORE(model), &iter,
 	        		              COL_PERM, temp_val1,
 	       			               COL_NAME, temp_val9,
-	        		              COL_SIZE, atoi(temp_val5),
+	        		              COL_SIZE, temp_val5,
 	        		              COL_MOD, date,
         	        		      -1);
 		}
@@ -889,39 +1186,6 @@ void view_popup_menu_cli(GtkWidget *treeview, GdkEventButton *event, Appstate *a
 	}
 }
  
-/* Action on pressing the button */ 
-gboolean view_onButtonPressed_cli(GtkWidget *treeview, GdkEventButton *event,Appstate *app_state)
-{
-	/* single click with the right mouse button? */
-	if (event->type == GDK_BUTTON_PRESS  &&  event->button == 3)
-	{
-		if (1)
-		{
-			GtkTreeSelection *selection;
-			selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
- 
-			if (gtk_tree_selection_count_selected_rows(selection)  <= 1)
-			{
-				GtkTreePath *path;
- 
-				/* Get tree path for row that was clicked */
-				if (gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(treeview),(gint) event->x,(gint) event->y,&path, NULL, NULL, NULL))
-				{
-					gtk_tree_selection_unselect_all(selection);
-					gtk_tree_selection_select_path(selection, path);
-					gtk_tree_path_free(path);
-				}
-			}
-		} /* end of optional bit */
- 
-	view_popup_menu_cli(treeview, event, app_state);
- 
-	return TRUE; /* we handled this */
-	}
- 
-	return FALSE; /* we did not handle this */
-}
- 
  
 gboolean view_onPopupMenu_cli(GtkWidget *treeview, Appstate *app_state)
 {	
@@ -931,7 +1195,7 @@ gboolean view_onPopupMenu_cli(GtkWidget *treeview, Appstate *app_state)
 } 
  
 /* Pop menu on server side in list store */
-void view_popup_menu (GtkWidget *treeview, GdkEventButton *event, Appstate *app_state)
+void view_popup_menu(GtkWidget *treeview, GdkEventButton *event, Appstate *app_state)
 {
 	GtkWidget *menu, *down, *delete, *rename, *change_dir;
  
@@ -964,7 +1228,7 @@ void view_popup_menu (GtkWidget *treeview, GdkEventButton *event, Appstate *app_
 }
  
 /* Action on pressing button */
-gboolean view_onButtonPressed (GtkWidget *treeview, GdkEventButton *event,Appstate *app_state)
+gboolean view_onButtonPressed(GtkWidget *treeview, GdkEventButton *event,Appstate *app_state)
 {
 	/* single click with the right mouse button? */
 	if (event->type == GDK_BUTTON_PRESS  &&  event->button == 3)
@@ -992,29 +1256,111 @@ gboolean view_onButtonPressed (GtkWidget *treeview, GdkEventButton *event,Appsta
  
 	return TRUE; /* we handled this */
 	}
+	else if (event->type == GDK_2BUTTON_PRESS)
+	{
+		if (1)
+		{
+			GtkTreeSelection *selection;
+			selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
  
+			if (gtk_tree_selection_count_selected_rows(selection)  <= 1)
+			{
+				GtkTreePath *path;
+ 
+				/* Get tree path for row that was clicked */
+				if (gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(treeview),(gint) event->x,(gint) event->y,&path, NULL, NULL, NULL))
+				{
+					gtk_tree_selection_unselect_all(selection);
+					gtk_tree_selection_select_path(selection, path);
+					gtk_tree_path_free(path);
+				}
+			}
+		} /* end of optional bit */
+ 	
+	view_popup_menu_change_dir(treeview,app_state);
+	return TRUE;
+
+	} 
+	return FALSE; /* we did not handle this */
+}
+ 
+ 	
+/* Action on pressing button client*/
+gboolean view_onButtonPressed_cli(GtkWidget *treeview, GdkEventButton *event,Appstate *app_state)
+{
+	/* single click with the right mouse button? */
+	if (event->type == GDK_BUTTON_PRESS  &&  event->button == 3)
+	{
+		if (1)
+		{
+			GtkTreeSelection *selection;
+			selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+ 
+			if (gtk_tree_selection_count_selected_rows(selection)  <= 1)
+			{
+				GtkTreePath *path;
+ 
+				/* Get tree path for row that was clicked */
+				if (gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(treeview),(gint) event->x,(gint) event->y,&path, NULL, NULL, NULL))
+				{
+					gtk_tree_selection_unselect_all(selection);
+					gtk_tree_selection_select_path(selection, path);
+					gtk_tree_path_free(path);
+				}
+			}
+		} /* end of optional bit */
+ 
+	view_popup_menu_cli(treeview, event, app_state);
+ 
+	return TRUE; /* we handled this */
+	}
+	else if (event->type == GDK_2BUTTON_PRESS)
+	{
+		if (1)
+		{
+			GtkTreeSelection *selection;
+			selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+ 
+			if (gtk_tree_selection_count_selected_rows(selection)  <= 1)
+			{
+				GtkTreePath *path;
+ 
+				/* Get tree path for row that was clicked */
+				if (gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(treeview),(gint) event->x,(gint) event->y,&path, NULL, NULL, NULL))
+				{
+					gtk_tree_selection_unselect_all(selection);
+					gtk_tree_selection_select_path(selection, path);
+					gtk_tree_path_free(path);
+				}
+			}
+		} /* end of optional bit */
+ 	
+	view_popup_menu_change_dir_cli(treeview,app_state);
+	return TRUE;
+
+	} 
 	return FALSE; /* we did not handle this */
 }
  
  
-gboolean view_onPopupMenu (GtkWidget *treeview, Appstate *app_state)
+gboolean view_onPopupMenu(GtkWidget *treeview, Appstate *app_state)
 {	
 	view_popup_menu(treeview, NULL, app_state);
  
 	return TRUE; /* we handled this */
 } 
  
-static GtkTreeModel *create_and_fill_model (void)
+static GtkTreeModel *create_and_fill_model()
 {
 	GtkListStore  *store;
 	
-	store = gtk_list_store_new (NUM_COLS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_UINT, G_TYPE_STRING);
+	store = gtk_list_store_new (NUM_COLS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
 
 	return GTK_TREE_MODEL (store);
 }
 
 /* Client side */
-static GtkWidget *create_view_and_model1 (Appstate *app_state)
+static GtkWidget *create_view_and_model1(Appstate *app_state)
 {
 	GtkCellRenderer     *renderer;
 	GtkTreeModel        *model;
@@ -1073,7 +1419,7 @@ static GtkWidget *create_view_and_model1 (Appstate *app_state)
 }
  
 /* Server side */ 
-static GtkWidget *create_view_and_model (Appstate *app_state)
+static GtkWidget *create_view_and_model(Appstate *app_state)
 {
 	GtkCellRenderer     *renderer;
 	GtkTreeModel        *model;
@@ -1132,7 +1478,7 @@ static GtkWidget *create_view_and_model (Appstate *app_state)
 }
  
 /* Focus out popup window */
-gboolean on_popup_focus_out (GtkWidget *widget,GdkEventFocus *event,gpointer data)
+gboolean on_popup_focus_out(GtkWidget *widget,GdkEventFocus *event,gpointer data)
 {
 	gtk_widget_destroy (widget);
 	return TRUE;
@@ -1302,18 +1648,6 @@ void about_us_func(GtkWidget *widget,Appstate *app_state)
 	return;
 }
 
-
-/*Get home directory of user executing program */
-char * find_home_dir(char *file)
-{
-	struct passwd *pw;
-	char *sudo_uid = getenv("SUDO_UID");
-	pw = getpwuid(atoi(sudo_uid));
-	
-	return pw->pw_dir;
-
-}
-
 /* Remove directory on client side */
 void rmdir_cli(Appstate *app_state,char *user_input)
 {
@@ -1370,10 +1704,9 @@ void rmdir_serv(Appstate *app_state,char *user_input)
 		return;
 	}
 	
-	char *address = (char *)malloc(MAXSZ);
+	char *argv = (char *)malloc(MAXSZ);
 	
-	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
-	char *argv = address;	
+	argv = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
@@ -1625,11 +1958,10 @@ void down_serv(Appstate *app_state,char *user_input)
 	char cwd[MAXSZ];
 	bzero(cwd,MAXSZ);
 
-	char *address = (char *)malloc(MAXSZ);
+	char *argv = (char *)malloc(MAXSZ);
 	
 	/* Get IP Address of server from IP Address entry */
-	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
-	char *argv = address;	
+	argv = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 
 	char *home_dir= find_home_dir(argv);
 
@@ -1686,10 +2018,9 @@ void serv_cd_dir(Appstate *app_state,char *user_input)
 	char message_from_server[MAXSZ];
 	char serv_curr_dir[MAXSZ];
 	
-	char *address = (char *)malloc(MAXSZ);
+	char *argv = (char *)malloc(MAXSZ);
 	
-	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
-	char *argv = address;	
+	argv = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 	
 	bzero(message_to_server,MAXSZ);
 	bzero(message_from_server,MAXSZ);
@@ -1916,10 +2247,9 @@ void ls_ser_func(GtkWidget *widget,Appstate *app_state)
 	app_state->running = 1;
 
 	char user_input[]="ls -l";
-	char *address = (char *)malloc(MAXSZ);
+	char *argv = (char *)malloc(MAXSZ);
 	
-	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
-	char *argv = address;	
+	argv = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 
 	gtk_entry_set_text(GTK_ENTRY(app_state->command),user_input); 
 
@@ -2010,10 +2340,9 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 	}
 
 	char *user_input = (char *)malloc(MAXSZ);
-	char *address = (char *)malloc(MAXSZ);
+	char *argv = (char *)malloc(MAXSZ);
 	
-	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
-	char *argv = address;	
+	argv = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 	int count;
 	int temp;
 	int j = 0;	
@@ -2547,8 +2876,6 @@ int validate_ip(char *ip)
 }
 
 
-
-
 /* Establish connection */
 int connect_func(GtkWidget *widget, Appstate *app_state)
 {
@@ -2594,7 +2921,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 		sprintf(buff,"\n");
 		print_buff(app_state);
 		close(app_state->sockfd);
-		sprintf(buff,"Disconnected\n-----------------------------------------------------------------------------------------------------------------------------------------------------\n");
+		sprintf(buff,"Disconnected!!!\n\n");
 		print_buff(app_state);
 		gtk_button_set_label(GTK_BUTTON(app_state->button),"Connect");
 		app_state->status = 0;
@@ -2605,14 +2932,13 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 
 	char *password = (char*)malloc(MAXSZ);
 	char *username = (char *)malloc(MAXSZ);
-	char *address= (char *)malloc(MAXSZ);
+	char *argv= (char *)malloc(MAXSZ);
 	
 	/* Get server ip address, username and password */
-	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
+	argv = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 	username = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->user));
 	password = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->password));
 	
-	char *argv = address;
 
 	char serv_curr_dir[MAXSZ];
 	char ip_address[30];
@@ -2632,13 +2958,43 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	struct sockaddr_in serverAddress;/* client will connect on this */
 	struct hostent *host;
 
+	if(strlen(username) == 0)
+	{
+
+		sprintf(buff,"Error: Please enter username!\n");
+		buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app_state->text_view));
+		gtk_text_buffer_set_text(buffer,buff,strlen(buff));
+		gtk_text_buffer_get_end_iter(buffer,&iter);
+		gtk_text_view_scroll_to_iter(GTK_TEXT_VIEW(app_state->text_view),&iter,0.0,FALSE,0,0);
+		while(gtk_events_pending())
+		gtk_main_iteration();
+		
+		bzero(buff,MAXSZ1);
+		return -1;
+	}
+
+	if(strlen(password) == 0)
+	{
+
+		sprintf(buff,"Error: Please enter password!\n");
+		buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app_state->text_view));
+		gtk_text_buffer_set_text(buffer,buff,strlen(buff));
+		gtk_text_buffer_get_end_iter(buffer,&iter);
+		gtk_text_view_scroll_to_iter(GTK_TEXT_VIEW(app_state->text_view),&iter,0.0,FALSE,0,0);
+		while(gtk_events_pending())
+		gtk_main_iteration();
+		
+		bzero(buff,MAXSZ1);
+		return -1;
+	}
+
 	if(isdigit(argv[0]))
 	{
 		ip_valid = validate_ip(argv);/* Validate ip-address entered by user */
 	
 		if(ip_valid == MIN_VALUE)/* Invalid ipaddress */
 		{
-			sprintf(buff,"Error: Invalid ip-address\n");
+			sprintf(buff,"Error: Invalid ip-address!\n");
 			buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app_state->text_view));
 			gtk_text_buffer_set_text(buffer,buff,strlen(buff));
 			gtk_text_buffer_get_end_iter(buffer,&iter);
@@ -3093,10 +3449,9 @@ void mkdir_serv(Appstate *app_state,char *user_input)
 		return;
 	}
 	
-	char *address = (char *)malloc(MAXSZ);
+	char *argv = (char *)malloc(MAXSZ);
 	
-	address = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
-	char *argv = address;	
+	argv = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
@@ -4247,6 +4602,7 @@ int main( int argc,char *argv[] )
 	app_state.temp_file_descriptor_cli = mkstemp(temporary_file_cli);
 	
 	GtkWidget *table;
+	GdkDragAction action = GDK_ACTION_COPY;
 	
 	/* IP Address */	
 	GtkWidget *label;
@@ -4495,15 +4851,31 @@ int main( int argc,char *argv[] )
   
 	/* List store for server files*/
 	app_state.view = create_view_and_model (&app_state);
+	app_state.view1 = create_view_and_model1 (&app_state);
 	scrolled_window1 = gtk_scrolled_window_new(NULL, NULL);              
 	gtk_container_add(GTK_CONTAINER(scrolled_window1),app_state.view);       
+	gtk_drag_source_set(app_state.view,GDK_BUTTON1_MASK, &drag_targets,n_targets,action);
+	/* Attach a "drag-data-get" signal to send out the dragged data */
+	g_signal_connect(app_state.view,"drag-data-get",G_CALLBACK(on_drag_data_get_serv),NULL);
+ 
+	/* Set treeview 2 as the destination of the Drag-N-Drop operation */
+	gtk_drag_dest_set(app_state.view1,GTK_DEST_DEFAULT_ALL,&drag_targets,n_targets,action); 
+	/* Attach a "drag-data-received" signal to pull in the dragged data */
+	g_signal_connect(app_state.view1,"drag-data-received",G_CALLBACK(on_drag_data_received_cli),&app_state);
 	gtk_table_attach(GTK_TABLE(table),scrolled_window1,2,4,6,7,GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,2,1);
   
 
-	/* List store for server files*/
-	app_state.view1 = create_view_and_model1 (&app_state);
+	/* List store for client files*/
 	scrolled_window2 = gtk_scrolled_window_new(NULL, NULL);              
 	gtk_container_add(GTK_CONTAINER(scrolled_window2),app_state.view1);       
+	gtk_drag_source_set(app_state.view1,GDK_BUTTON1_MASK, &drag_targets,n_targets,action);
+	/* Attach a "drag-data-get" signal to send out the dragged data */
+	g_signal_connect(app_state.view1,"drag-data-get",G_CALLBACK(on_drag_data_get_cli),NULL);
+
+	gtk_drag_dest_set(app_state.view,GTK_DEST_DEFAULT_ALL,&drag_targets,n_targets,action); 
+	/* Attach a "drag-data-received" signal to pull in the dragged data */
+	g_signal_connect(app_state.view,"drag-data-received",G_CALLBACK(on_drag_data_received_serv),&app_state);
+ 
 	gtk_table_attach(GTK_TABLE(table),scrolled_window2,0,2,6,7,GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,2,1);
   
 	/* Connect button */
