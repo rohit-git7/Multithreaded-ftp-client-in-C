@@ -27,7 +27,11 @@ Following functions are included. For example:
 To run:                                                                                                           
 Run command `make all` to compile program.                                                                              
 To execute, run `./myftp server-ip-address`.                                                                            
-Enter user credentials to login on server.                                                                                                                                           
+Enter user credentials to login on server.                                                                             
+#Features in GUI(Apart from all the functionalities)                                                                  
+* Drag N Drop to upload and download files.                                                                          
+* Double click to enter directory.                                                                                   
+
 #Acknowledgements
 * Professor `Khushil Saini`, for the project idea and concepts about multithreading.
 * Stackoverflow community(http://stackoverflow.com).
