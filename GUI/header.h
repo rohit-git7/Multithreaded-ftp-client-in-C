@@ -17,6 +17,7 @@
 #include<errno.h>
 #include<glib.h>
 #include<netdb.h>
+#include<signal.h>
 
 #define PORT 21
 #define MAXSZ 4096
@@ -66,7 +67,6 @@ struct userdetails
 {
 	char arg[MAXSZ];
 	char user_input[MAXSZ];
-	char home_dir[MAXSZ];
 	char pwd[MAXSZ];
 	int t_id;
 	int size;
@@ -101,3 +101,5 @@ struct DATA
 	char *size;
 	char *date;
 };
+
+Appstate app_state;

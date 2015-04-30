@@ -1,6 +1,16 @@
 /*
 Each thread will establish an instruction connection and a passive connection to server.
 */
+void signal_handler_func_thre(int sig_num)
+{
+
+	close(app_state.sockfd);
+	gtk_button_set_label(GTK_BUTTON(app_state.button),"Connect");
+	app_state.status = 0;
+	gtk_entry_set_editable(GTK_ENTRY(app_state.entry),TRUE);
+	
+}
+
 void *function(void *point)
 {
 	int sockfd;
@@ -24,14 +34,14 @@ void *function(void *point)
 	char data[MAXSZ];
 	char file[MAXSZ];// File name
 	char file_name[MAXSZ];// File name with instruction to server
-	char file_home_dir[MAXSZ];// Location of file i.e. User's home directory(Complete path to file).
 
+	signal(SIGPIPE,signal_handler_func_thre);
+	
 	/* Initialise all the character arrays */
 	bzero(message_from_server,MAXSZ);
 	bzero(message_to_server,MAXSZ);
 	bzero(file_name,MAXSZ);
 	bzero(file,MAXSZ);
-	bzero(file_home_dir,MAXSZ);
 	bzero(data,MAXSZ);
 
 	sockfd = socket(AF_INET,SOCK_STREAM,0);
@@ -147,8 +157,7 @@ void *function(void *point)
 				break;
 		}
 		
-		sprintf(file,"%s",(obj->user_input) + 4);
-
+		sprintf(file,"%s%d",(obj->user_input) + 4,(obj->t_id));
 
 		/* Send file name */
 		sprintf(file_name,"RETR %s/%s\r\n",obj->pwd,(obj->user_input) + 4);	
@@ -161,12 +170,11 @@ void *function(void *point)
 				break;
 		}
 		
-		sprintf(file_home_dir,"%s%d",file,obj->t_id);
 		
 		/* Create file on client system */	
-		fd = open(file_home_dir,O_CREAT|O_WRONLY|O_TRUNC,0644);			
+		fd = open(file,O_CREAT|O_WRONLY|O_TRUNC,0644);			
 		size = 0;
-		while((no_of_bytes = recv(newsockfd,data,MAXSZ,0))>0)//Get specific chunk of data
+		while((no_of_bytes = recv(newsockfd,data,MAXSZ,0)) > 0)//Get specific chunk of data
 		{
 			if(size >= obj->size)
 				break;		

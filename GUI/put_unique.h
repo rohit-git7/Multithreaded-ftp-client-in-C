@@ -10,8 +10,15 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 	int fd;	
 	int p;
 	int total;
+	int temp;
+	int temp1;
+	int file_size;
+	int size;
+	int down = 2;
 	
 	struct timeval tm;/* time structure to set time wait for receive buffer */
+	struct stat file_buff;
+
 	tm.tv_sec = 1;
 	tm.tv_usec = 750000;
 	
@@ -104,9 +111,30 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 			sprintf(file,"%s",user_input + 8);
 
 			fd = open(file,O_RDONLY);
-		
-			while((no_of_bytes = read(fd,data,MAXSZ)) > 0)
+			fstat(fd,&file_buff);
+			size = (int)file_buff.st_size;
+			file_size = 0;		
+			if(size % 100 == 0)
+				temp = (size / 100);
+			else
+				temp = (size / 100) + 1;
+			
+			temp1 = temp;
+			sprintf(buff,"Uploading [");
+			print_buff(app_state);
+			while(size > 0)
 			{
+				no_of_bytes = read(fd,data,MAXSZ);
+				file_size += no_of_bytes;
+				temp1 = temp * down;
+			
+				while(temp1 <= file_size)
+				{
+					sprintf(buff,"#");
+					print_buff(app_state);
+					down += 2;
+					temp1 = temp * down;
+				}
 				total = 0;
 				while(total < no_of_bytes)
                 		{
@@ -115,8 +143,12 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 					while(gtk_events_pending())
 						gtk_main_iteration();
 				}
+				size -= no_of_bytes;
 				bzero(data,MAXSZ);
 			}
+		
+			sprintf(buff,"] 100%%\n");
+			print_buff(app_state);
 					
 			close(fd);
 			close(newsockfd);

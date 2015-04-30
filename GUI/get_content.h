@@ -3,7 +3,7 @@
 Download files from server.
 */
 
-void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
+void get_content(char *arg,char *user_input,Appstate *app_state)
 {
 	
 	/* Temporary variables*/
@@ -24,7 +24,6 @@ void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
 	char message_to_server[MAXSZ];
 	char file[MAXSZ];// File name
 	char file_name[MAXSZ];// File name with instruction to server
-	char file_home_dir[MAXSZ];// Location of file i.e. User's home directory(Complete path to file).
 	char data[MAXSZ];// Data transfer
 	char pwd[MAXSZ];
 	char size_file[MAXSZ];// size of file
@@ -37,7 +36,6 @@ void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
 	bzero(message_to_server,MAXSZ);
 	bzero(file_name,MAXSZ);
 	bzero(file,MAXSZ);
-	bzero(file_home_dir,MAXSZ);
 	bzero(data,MAXSZ);
 	bzero(pwd,MAXSZ);
 	bzero(size_file,MAXSZ);	
@@ -176,16 +174,14 @@ void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
 		}
 		else
 		{
-			sprintf(file_home_dir,"%s/%s",home_dir,file);
-		
 			/* Create file on client system */	
 			filehandle = open(file,O_CREAT|O_WRONLY|O_TRUNC,0644);			
 			
 			/* Decide total number of threads to be created */
-			if(size <= 5000)
+			if(size <= 150000)
 				no_of_threads = 1;
-			else if(size > 5000 && size < 100000)
-				no_of_threads = 4;
+			else if(size > 150000 && size < 1000000)
+				no_of_threads = 5;
 			else
 				no_of_threads = 10;
 		
@@ -202,7 +198,6 @@ void get_content(char *arg,char *user_input,Appstate *app_state,char *home_dir)
 				for(i = 0;i < no_of_threads;i++)// Initialise structures
 				{
 					strcpy(user[i].arg,arg);
-					strcpy(user[i].home_dir,home_dir);	
 					strcpy(user[i].user_input,user_input);
 					strcpy(user[i].pwd,pwd);	
 					if(size % no_of_threads == 0)

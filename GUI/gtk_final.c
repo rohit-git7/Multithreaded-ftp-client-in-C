@@ -23,7 +23,6 @@ void rename_serv(Appstate *,char *,char *);
 void new_func(Appstate *);
 void new_func_cli(Appstate *);
 gboolean on_popup_focus_out(GtkWidget *,GdkEventFocus *,gpointer data);
-gboolean foreach_func(GtkTreeModel *,GtkTreePath *, GtkTreeIter *, gpointer);
 void on_drag_data_get_serv(GtkWidget *,GdkDragContext *,GtkSelectionData *, guint , guint ,gpointer );
 void on_drag_data_received_cli(GtkWidget *, GdkDragContext *,gint , gint , GtkSelectionData *, guint ,guint , Appstate *);
 void on_drag_data_get_cli(GtkWidget *,GdkDragContext *,GtkSelectionData *, guint , guint ,gpointer );
@@ -77,50 +76,17 @@ void pwd_cli_func(GtkWidget *,Appstate *);
 void pwd_serv_func(GtkWidget *,Appstate *);
 void rmfile_cli_func(GtkWidget *,Appstate *);
 void rmfile_serv_func(GtkWidget *,Appstate *);
-char *find_home_dir(char *);
  
-/*Get home directory of user executing program */
-char *find_home_dir(char *file)
+void signal_handler_func(int sig_num)
 {
-	struct passwd *pw;
-	char *sudo_uid = getenv("SUDO_UID");
-	pw = getpwuid(atoi(sudo_uid));
+
+	g_print("SIGPIPE");
+
+	close(app_state.sockfd);
+	gtk_button_set_label(GTK_BUTTON(app_state.button),"Connect");
+	app_state.status = 0;
+	gtk_entry_set_editable(GTK_ENTRY(app_state.entry),TRUE);
 	
-	return pw->pw_dir;
-
-}
-
-
-gboolean foreach_func(GtkTreeModel *model,GtkTreePath  *path, GtkTreeIter  *iter, gpointer user_data)
-{
-	gchar *col1, *col2, *col3,*col4,*tree_path_str;
-
-	gtk_tree_model_get (model, iter,
-			COL_PERM, &col1,
-                        COL_NAME, &col2,
-                        COL_SIZE, &col3,
-                        COL_MOD, &col4,
-                        -1);
-
-	tree_path_str = gtk_tree_path_to_string(path);
-
-	if(strcmp(user_data,col2) == 0)
-	{
-		drag_same_side = 1;
-		return TRUE;
-	}
-	
-	if(strlen(col1) == 0)
-		return TRUE;
-
-	g_free(tree_path_str);
-
-	g_free(col1); 
-	g_free(col4); 
-	g_free(col2); 
-	g_free(col3); 
-
-	return FALSE; 
 }
 
 /* User callback for "getting" the data out of the row that was DnD'd */
@@ -148,8 +114,6 @@ void on_drag_data_get_serv(GtkWidget *widget,GdkDragContext *drag_context,GtkSel
  
 	/* Allocate a new row to send off to the other side */
 	struct DATA *temp = malloc(sizeof(struct DATA));
- 
-	/* Go through the columns */
  
 	/* Get the GValue of a particular column from the row, the iterator currently points to*/
 	gtk_tree_model_get_value(list_store,&iter,COL_PERM,&value);
@@ -190,24 +154,19 @@ void on_drag_data_received_cli(GtkWidget *widget, GdkDragContext *drag_context,g
 {
  
 	/* Now add to the other treeview */
-	GtkTreeModel *list_store;
-	list_store = gtk_tree_view_get_model(GTK_TREE_VIEW(widget));
 	
+	GtkWidget *wid = gtk_drag_get_source_widget(drag_context);
+
+	if(wid == widget)
+		return;
+
 	char user_input[MAXSZ];
 
 	bzero(user_input,MAXSZ);
 
 	/* Copy the pointer we received into a new struct */
 	struct DATA *temp = NULL;
-	memcpy (&temp, sdata->data, sizeof (temp));
-	
-	gtk_tree_model_foreach(list_store,foreach_func,temp->name);
-
-	if(drag_same_side == 1)
-	{
-		drag_same_side = 0;
-		return;
-	}
+	memcpy(&temp, sdata->data, sizeof(temp));
 	
 	sprintf(user_input,"get %s",temp->name);
 
@@ -289,8 +248,13 @@ void on_drag_data_received_serv(GtkWidget *widget, GdkDragContext *drag_context,
 {
  
 	/* Now add to the other treeview */
-	GtkTreeModel *list_store;
-	list_store = gtk_tree_view_get_model(GTK_TREE_VIEW(widget));
+
+	GtkWidget *wid = gtk_drag_get_source_widget(drag_context);
+
+	if(wid == widget)
+	{
+		return;
+	}
 	
 	char user_input[MAXSZ];
 
@@ -298,16 +262,8 @@ void on_drag_data_received_serv(GtkWidget *widget, GdkDragContext *drag_context,
 	
 	/* Copy the pointer we received into a new struct */
 	struct DATA *temp = NULL;
-	memcpy (&temp, sdata->data, sizeof (temp));
+	memcpy(&temp, sdata->data, sizeof(temp));
 	
-	gtk_tree_model_foreach(list_store,foreach_func,temp->name);
-
-	if(drag_same_side == 1)
-	{
-		drag_same_side = 0;
-		return;
-	}
-
 	sprintf(user_input,"uniqput %s",temp->name);
 	
 	if(temp->perm[0] == '-')
@@ -1963,8 +1919,6 @@ void down_serv(Appstate *app_state,char *user_input)
 	/* Get IP Address of server from IP Address entry */
 	argv = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 
-	char *home_dir= find_home_dir(argv);
-
 	clock_t start;
 	clock_t end;
 	double cpu_time;
@@ -1974,7 +1928,7 @@ void down_serv(Appstate *app_state,char *user_input)
 	app_state->running = 1;
 
 	start = clock();//Start clock
-	get_content(argv,user_input,app_state,home_dir);//Call function to get files
+	get_content(argv,user_input,app_state);//Call function to get files
 	end = clock();//Stop clock
 	cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;//Calculate CPU time
 	sprintf(buff,"Time taken %lf\n\n",cpu_time);
@@ -2360,8 +2314,6 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 	char cwd[MAXSZ];
 	char serv_curr_dir[MAXSZ];
 
-	char *home_dir= find_home_dir(argv);//Get home directory of user
-
 	int no_of_bytes;
 	int ret_value;	
 
@@ -2628,7 +2580,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		app_state->running = 1;
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 		start = clock();
-		get_content(argv,user_input,app_state,home_dir);
+		get_content(argv,user_input,app_state);
 		end = clock();
 		cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
 		sprintf(buff,"Time taken %lf\n\n",cpu_time);
@@ -3177,6 +3129,14 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 			{
 				temp = 0;	
 			}
+		
+			if(strncmp(message_from_server,"501",3) == 0)
+			{
+				temp = 3;	
+			}
+		
+			if(strstr(message_from_server,"501 ") > 0)
+				sprintf(buff,"%s",strstr(message_from_server,"230 "));
 			if(strstr(message_from_server,"230 ") > 0)
 				sprintf(buff,"%s",strstr(message_from_server,"230 "));
 			if(strstr(message_from_server,"530 ") > 0)
@@ -3194,7 +3154,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	sprintf(buff,"\n");
 	print_buff(app_state);
 	
-	if(temp == 0)/* Invalid ipaddress */
+	if(temp == 3 || temp == 0)
 	{
 		close(app_state->sockfd);
 		app_state->status = 0;
@@ -4592,7 +4552,6 @@ void rmfile_serv_func(GtkWidget *widget,Appstate *app_state)
 int main( int argc,char *argv[] )
 {
 
-	Appstate app_state;
 	app_state.status = 0;
 	app_state.running = 0;
 	app_state.seek = 0;
@@ -4600,6 +4559,8 @@ int main( int argc,char *argv[] )
 
 	app_state.temp_file_descriptor = mkstemp(temporary_file);
 	app_state.temp_file_descriptor_cli = mkstemp(temporary_file_cli);
+	
+	signal(SIGPIPE,signal_handler_func);
 	
 	GtkWidget *table;
 	GdkDragAction action = GDK_ACTION_COPY;
