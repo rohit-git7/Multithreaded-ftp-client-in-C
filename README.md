@@ -36,3 +36,7 @@ Enter user credentials to login on server.
 * Professor `Khushil Saini`, for the project idea and concepts about multithreading.
 * Stackoverflow community(http://stackoverflow.com).
 * The very helpful documentation of FTP `RFC 959`(https://www.ietf.org/rfc/rfc959.txt).
+                                                                                                                          
+#TODO List
+* Multiple selection
+* Progress Bar
