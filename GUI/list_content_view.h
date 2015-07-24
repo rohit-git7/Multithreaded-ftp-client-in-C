@@ -24,15 +24,15 @@ int list_content_view(char *arg, char *user_input, Appstate *app_state)
 	/* Request server to start BINARY mode */
 	send(app_state->sockfd,"TYPE I\r\n",8,0);
 		
-	while(gtk_events_pending())
-		gtk_main_iteration();
+//	while(gtk_events_pending())
+//		gtk_main_iteration();
 	
 
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
 	{
 		message_from_server[no_of_bytes] = '\0';
-		while(gtk_events_pending())
-			gtk_main_iteration();
+//		while(gtk_events_pending())
+//			gtk_main_iteration();
 	
 		if(strstr(message_from_server,"200 ") > 0 || strstr(message_from_server,"501 ") > 0 ||strstr(message_from_server,"500 ") > 0 ||strstr(message_from_server,"504 ") > 0 ||strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"530 ") > 0)
 			break;
@@ -48,11 +48,9 @@ int list_content_view(char *arg, char *user_input, Appstate *app_state)
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
 	{
 		message_from_server[no_of_bytes] = '\0';
-		while(gtk_events_pending())
-			gtk_main_iteration();
+//		while(gtk_events_pending())
+//			gtk_main_iteration();
 			
-	
-	
 		if(strstr(message_from_server,"227 ") > 0 || strstr(message_from_server,"501 ") > 0 ||strstr(message_from_server,"500 ") > 0 ||strstr(message_from_server,"502 ") > 0 ||strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"530 ") > 0)
 			break;
 	}
@@ -82,8 +80,8 @@ int list_content_view(char *arg, char *user_input, Appstate *app_state)
 		while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
 		{
 			message_from_server[no_of_bytes] = '\0';
-			while(gtk_events_pending())
-				gtk_main_iteration();
+	//		while(gtk_events_pending())
+	//			gtk_main_iteration();
 	
 			if(strstr(message_from_server,"550 ") > 0 || strstr(message_from_server,"425 ") > 0|| strstr(message_from_server,"125 ") > 0||strstr(message_from_server,"150 ") > 0 || strstr(message_from_server,"501 ") > 0 ||strstr(message_from_server,"500 ") > 0 ||strstr(message_from_server,"502 ") > 0 ||strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"530 ") > 0)
 				break;
@@ -106,8 +104,8 @@ int list_content_view(char *arg, char *user_input, Appstate *app_state)
 			{
 				p = write(app_state->temp_file_descriptor,message_from_server + total,no_of_bytes - total);
 				total += p;
-				while(gtk_events_pending())
-					gtk_main_iteration();
+		//		while(gtk_events_pending())
+		//			gtk_main_iteration();
 			}
 		}
 		
@@ -118,8 +116,8 @@ int list_content_view(char *arg, char *user_input, Appstate *app_state)
 		while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
 		{	
 			message_from_server[no_of_bytes] = '\0';
-			while(gtk_events_pending())
-				gtk_main_iteration();
+	//		while(gtk_events_pending())
+	//			gtk_main_iteration();
 			if(strstr(message_from_server,"226 ") > 0)
 				break;
 		}

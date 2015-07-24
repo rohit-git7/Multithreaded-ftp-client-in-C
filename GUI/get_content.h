@@ -3,8 +3,15 @@
 Download files from server.
 */
 
-void get_content(char *arg,char *user_input,Appstate *app_state)
+void *get_content(void *thread_data)
 {
+	
+	struct data *my_data;
+	my_data = (struct data *)thread_data;
+	
+	char *arg = my_data->argv1;
+	char *user_input = my_data->user_data;
+	Appstate *app_state = my_data->app_state;
 	
 	/* Temporary variables*/
 	int no_of_bytes;
@@ -19,6 +26,11 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 	int partial_bytes;
 	int filehandle;
 	int fd;
+	int retry = 0;	
+	int error_val = 0;
+
+	clock_t start,end;
+	double cpu_time;
 
 	char message_from_server[MAXSZ];
 	char message_to_server[MAXSZ];
@@ -45,14 +57,37 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 	/* Getting file size from server*/
 	sprintf(size_file,"SIZE %s\r\n",user_input + 4);
 	send(app_state->sockfd,size_file,strlen(size_file),0);
-
+	
+	error_val = 0;
+	retry = 0;
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
 	{
+		if(no_of_bytes == 0)
+		{
+			if(retry < 3)
+			{
+				retry++;
+				continue;
+			}
+			else
+			{
+				error_val = 1;
+				break;
+			}
+			
+		}
+
 		message_from_server[no_of_bytes] = '\0';
-		while(gtk_events_pending())
-			gtk_main_iteration();
 		if(strstr(message_from_server,"213 ") > 0 || strstr(message_from_server,"501 ") > 0 ||strstr(message_from_server,"500 ") > 0 ||strstr(message_from_server,"502 ") > 0 ||strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"550 ") > 0)
 			break;
+	}
+	
+	if(error_val == 1)
+	{
+		sprintf(buff,"Error in downloading! Try again.\n");
+		print_buff(app_state);
+		global_val = 1;
+		pthread_exit(NULL);
 	}
 	
 	size = atoi(message_from_server + 4);/* Converting string to integer */
@@ -60,20 +95,41 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 	/* Getting current working dirctory */
 	send(app_state->sockfd,"PWD\r\n",5,0);
 
+	error_val = 0;
+	retry = 0;
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
 	{
+		if(no_of_bytes == 0)
+		{
+			if(retry < 3)
+			{
+				retry++;
+				continue;
+			}
+			else
+			{
+				error_val = 1;
+				break;
+			}
+			
+		}
+
 		message_from_server[no_of_bytes] = '\0';
-		while(gtk_events_pending())
-			gtk_main_iteration();
 		if(strstr(message_from_server,"257 ") > 0 || strstr(message_from_server,"501 ") > 0 ||strstr(message_from_server,"500 ") > 0 ||strstr(message_from_server,"502 ") > 0 ||strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"550 ") > 0)
 			break;
+	}
+	
+	if(error_val == 1)
+	{
+		sprintf(buff,"Error in downloading! Try again.\n");
+		print_buff(app_state);
+		global_val = 1;
+		pthread_exit(NULL);
 	}
 	
 	/* Exract current working directory name from the message */
 	for(i = 0; message_from_server[i]!='\0';i++)
 	{
-		while(gtk_events_pending())
-			gtk_main_iteration();
 		if(message_from_server[i] == '\"' && count == 1)
 		{
 			break;
@@ -98,8 +154,25 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 	sprintf(buff,"Command: TYPE I\nResponse: ");
 	print_buff(app_state);
 
+	retry = 0;
+	error_val = 0;
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
 	{
+		if(no_of_bytes == 0)
+		{
+			if(retry < 3)
+			{
+				retry++;
+				continue;
+			}
+			else
+			{
+				error_val = 1;
+				break;
+			}
+			
+		}
+
 		message_from_server[no_of_bytes] = '\0';
 		sprintf(buff,"%s",message_from_server);
 		print_buff(app_state);
@@ -109,17 +182,44 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 	}
 	sprintf(buff,"\n");	
 	print_buff(app_state);
+	if(error_val == 1)
+	{
+		sprintf(buff,"Error in downloading! Try again.\n");
+		print_buff(app_state);
+		global_val = 1;
+		pthread_exit(NULL);
+	}
+	
 
 	if(strstr(message_from_server,"501 ") > 0 ||strstr(message_from_server,"500 ") > 0 ||strstr(message_from_server,"504 ") > 0 ||strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"530 ") > 0)
-		return;	
-	
+	{
+		global_val = 1;
+		pthread_exit(NULL);
+	//	return;	
+	}
 	/* Send request for PASSIVE connection */	
 	send(app_state->sockfd,passive,strlen(passive),0);
 	sprintf(buff,"Command: %sResponse: ",passive);
 	print_buff(app_state);
-	
+	error_val = 0;
+	retry = 0;	
 	while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
 	{
+		if(no_of_bytes == 0)
+		{
+			if(retry < 3)
+			{
+				retry++;
+				continue;
+			}
+			else
+			{
+				error_val = 1;
+				break;
+			}
+			
+		}
+
 		message_from_server[no_of_bytes] = '\0';
 		sprintf(buff,"%s",message_from_server);
 		print_buff(app_state);
@@ -130,10 +230,21 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 	
 	sprintf(buff,"\n");
 	print_buff(app_state);
+	if(error_val == 1)
+	{
+		sprintf(buff,"Error in downloading! Try again.\n");
+		print_buff(app_state);
+		global_val = 1;
+		pthread_exit(NULL);
+	}
+	
 	
 	if(strstr(message_from_server,"501 ") > 0 ||strstr(message_from_server,"500 ") > 0 ||strstr(message_from_server,"502 ") > 0 ||strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"530 ") > 0)
-		return;
-		
+	{
+		global_val = 1;
+		pthread_exit(NULL);
+		//return;
+	}	
 	/* Server accepts request and sends PORT variables */
 	if(strncmp(message_from_server,"227",3) == 0)
 	{
@@ -152,9 +263,25 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 		print_buff(app_state);
 	
 		send(app_state->sockfd,file_name,strlen(file_name),0);
-				
+		retry = 0;
+		error_val  = 0;		
 		while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
 		{
+			if(no_of_bytes == 0)
+			{
+				if(retry < 3)
+				{
+					retry++;
+					continue;
+				}
+				else
+				{
+					error_val = 1;
+					break;
+				}
+			
+			}
+
 			message_from_server[no_of_bytes] = '\0';
 			sprintf(buff,"%s",message_from_server);
 			print_buff(app_state);
@@ -164,13 +291,23 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 		}
 		sprintf(buff,"\n");
 		print_buff(app_state);
+		if(error_val == 1)
+		{
+			sprintf(buff,"Error in downloading! Try again.\n");
+			print_buff(app_state);
+			global_val = 1;
+			pthread_exit(NULL);
+		}
+	
 	
 		
 		/* Permission Denied */
 		if(strncmp(message_from_server,"550",3) == 0 || strncmp(message_from_server,"425",3) == 0)
 		{
 			close(newsockfd);
-				return;
+			//	return;
+			global_val = 1;
+			pthread_exit(NULL);
 		}
 		else
 		{
@@ -192,7 +329,7 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 				pthread_t thre[no_of_threads];
 				pthread_attr_t attr;
 				pthread_attr_init(&attr);
-			//	pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
+				pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_JOINABLE);
 		
 
 				for(i = 0;i < no_of_threads;i++)// Initialise structures
@@ -204,49 +341,48 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 						user[i].size = size/no_of_threads;
 					else	
 						user[i].size = size/no_of_threads + 1;
-					while(gtk_events_pending())
-						gtk_main_iteration();
 				}
 		
+				start = clock();				
+
 				for( i = 0;i < no_of_threads;i++)// Create threads
 			        {
 					user[i].t_id = i;
         		        	pthread_create(&thre[i],&attr,function,(void *)&user[i]);
 					
-					while(gtk_events_pending())
-						gtk_main_iteration();
        			 	}
-				
+					
 				sprintf(buff,"Downloading...\n");
 				print_buff(app_state);
 	
 				pthread_attr_destroy(&attr);
-			       /* for(i = 0;i < no_of_threads;i++)// Wait for completion of all threads
+			        for(i = 0;i < no_of_threads;i++)// Wait for completion of all threads
         			{
-					while(gtk_events_pending())
-						gtk_main_iteration();
        	         			pthread_join(thre[i],NULL);
         			}
-			*/
+			
 				i = 0;
 				total = 0;
-				while(1)
+				error_val = 0;
+				while(i < no_of_threads)
 				{
-					if(i >= no_of_threads)
-						break;
-					while(gtk_events_pending())
-						gtk_main_iteration();
 					sprintf(temp_file,"%s%d",user_input + 4,i);
 					if(lstat(temp_file,&file_buff) == -1)
-						continue;
-						
+					{
+						error_val = 1;
+						break;
+					}
 					if(i < (no_of_threads -1))
 					{
 						if(user[i].size == (int)file_buff.st_size)
 						{
 							total += (int)file_buff.st_size;
 							i++;
-
+						}
+						else
+						{
+							error_val = 1;
+							break;
 						}	
 					}
 					else
@@ -255,8 +391,30 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 						{
 							i++;
 						}
+						else
+						{
+							error_val = 1;
+							break;
+						}
 					}
 				}
+
+				if(error_val == 1)
+				{
+					i = 0;
+					while(i < no_of_threads)
+					{
+						sprintf(temp_file,"%s%d",user_input + 4,i);
+						unlink(temp_file);
+						i++;
+					}
+					
+					sprintf(buff,"Error in downloading! Try again.\n");
+					print_buff(app_state);
+					global_val = 1;
+					pthread_exit(NULL);
+				}
+				
 				sprintf(buff,"Downloading Completed\n");
 				print_buff(app_state);
 				
@@ -264,8 +422,6 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 				while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)//Server might send an error message. We can ignore this.
 				{
 					message_from_server[no_of_bytes] = '\0';
-					while(gtk_events_pending())
-						gtk_main_iteration();
 					if(strstr(message_from_server,"450 ") > 0 ||strstr(message_from_server,"451 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"226 ") > 0 || strstr(message_from_server,"426 ") > 0)
 						break;
 				}		
@@ -284,8 +440,6 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 						total = 0;
 						while(total < no_of_bytes)
 						{
-							while(gtk_events_pending())
-								gtk_main_iteration();
                 	        			partial_bytes = write(filehandle,data + total,no_of_bytes - total);
 							total += partial_bytes;
 						}
@@ -294,20 +448,37 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 					close(fd);
 					unlink(temp_file);
 				}
+				end = clock();
 				close(filehandle);
 				sprintf(buff,"226 Transfer completed\n\n");
 				print_buff(app_state);
+
+				cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
+				sprintf(buff,"Time taken %lf\n\n",cpu_time);
+				print_buff(app_state);
+				
 	
 	
 			}
 			else//if file size is small. No need of multithreading
 			{
-				
 				while((no_of_bytes = recv(newsockfd,data,MAXSZ,0))>0)//get data on passive connection
 				{
-					while(gtk_events_pending())
-						gtk_main_iteration();
 					total = 0;
+					if(no_of_bytes == 0)
+					{
+						if(retry < 3)
+						{
+							retry++;
+							continue;
+						}
+						else
+						{
+							error_val = 1;
+							break;
+						}
+					}
+
 					/* For partial write operations */
 					while(total < no_of_bytes)
                 			{
@@ -319,8 +490,32 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 				/* Close PASSIVE socket and file */
 				close(newsockfd);
 				close(filehandle);
+
+				if(error_val == 1)
+				{
+					sprintf(buff,"Error in downloading! Try again.\n");
+					print_buff(app_state);
+					global_val = 1;
+					pthread_exit(NULL);
+				}
+
 				while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0))>0)
 				{
+					if(no_of_bytes == 0)
+					{
+						if(retry < 3)
+						{
+							retry++;
+							continue;
+						}
+						else
+						{
+							error_val = 1;
+							break;
+						}
+					
+					}
+
 					message_from_server[no_of_bytes] = '\0';
 					sprintf(buff,"%s",message_from_server);
 					print_buff(app_state);
@@ -330,9 +525,19 @@ void get_content(char *arg,char *user_input,Appstate *app_state)
 				}
 				sprintf(buff,"\n");
 				print_buff(app_state);
+				if(error_val == 1)
+				{
+					sprintf(buff,"Error in downloading! Try again.\n");
+					print_buff(app_state);
+					global_val = 1;
+					pthread_exit(NULL);
+				}
 	
+					
 			}
 		}	
 	}
+	global_val = 1;
+	pthread_exit(NULL);
 }
 		

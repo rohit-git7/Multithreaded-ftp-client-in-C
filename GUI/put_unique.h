@@ -1,8 +1,16 @@
 /*
 Upload files on server.
 */
-void put_unique(char *arg,char *user_input,Appstate *app_state)
-{	
+void *put_unique(void *thread_data)
+{
+	
+	struct data *my_data;
+	my_data = (struct data *)thread_data;
+	
+	char *arg = my_data->argv1;
+	char *user_input = my_data->user_data;
+	Appstate *app_state = my_data->app_state;
+	
 	/* Temporary variables*/
 	int no_of_bytes;
 	int port;	
@@ -15,6 +23,11 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 	int file_size;
 	int size;
 	int down = 2;
+
+	clock_t start;
+	clock_t end;
+	double cpu_time;
+	start = clock();//Start clock
 	
 	struct timeval tm;/* time structure to set time wait for receive buffer */
 	struct stat file_buff;
@@ -53,7 +66,11 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 	print_buff(app_state);
 	
 	if(strstr(message_from_server,"501 ") > 0 ||strstr(message_from_server,"500 ") > 0 ||strstr(message_from_server,"504 ") > 0 ||strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"530 ") > 0)
-		return;	
+	{	
+		global_val = 1;
+	//	return;
+		pthread_exit(NULL);
+	}
 
 	/* Send request for PASSIVE connection */	
 	send(app_state->sockfd,passive,strlen(passive),0);
@@ -75,7 +92,11 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 	print_buff(app_state);
 
 	if(strstr(message_from_server,"501 ") > 0 ||strstr(message_from_server,"500 ") > 0 ||strstr(message_from_server,"502 ") > 0 ||strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"530 ") > 0)
-		return;
+	{
+		global_val = 1;
+		pthread_exit(NULL);
+		//return;
+	}
 
 	/* Server accepts request and sends PORT variables */
 	if(strncmp(message_from_server,"227",3) == 0)
@@ -122,6 +143,8 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 			temp1 = temp;
 			sprintf(buff,"Uploading [");
 			print_buff(app_state);
+		
+
 			while(size > 0)
 			{
 				no_of_bytes = read(fd,data,MAXSZ);
@@ -138,17 +161,17 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 				total = 0;
 				while(total < no_of_bytes)
                 		{
-                		        p = send(newsockfd,data + total,no_of_bytes - total,0);
-                       			 total += p;
-					while(gtk_events_pending())
-						gtk_main_iteration();
+                		    p = send(newsockfd,data + total,no_of_bytes - total,0);
+                   			 total += p;
 				}
 				size -= no_of_bytes;
 				bzero(data,MAXSZ);
 			}
 		
+
 			sprintf(buff,"] 100%%\n");
 			print_buff(app_state);
+		
 					
 			close(fd);
 			close(newsockfd);
@@ -164,8 +187,15 @@ void put_unique(char *arg,char *user_input,Appstate *app_state)
 			}
 			sprintf(buff,"\n");
 			print_buff(app_state);
+	
+			end = clock();//Stop clock
+			cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;//Calculate CPU time
+			sprintf(buff,"Time taken %lf\n\n",cpu_time);
+			print_buff(app_state);
 		}
-				
+		global_val = 1;
 	}
+	pthread_exit(NULL);
+//	return;
 }
 

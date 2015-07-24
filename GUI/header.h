@@ -18,6 +18,7 @@
 #include<glib.h>
 #include<netdb.h>
 #include<signal.h>
+#include<X11/Xlib.h>
 
 #define PORT 21
 #define MAXSZ 4096
@@ -35,6 +36,7 @@ char user[MAXSZ];/* user details sent to server */
 char pass[MAXSZ];/* password details sent to server */
 char buff[MAXSZ1];  
 char passive[]="PASV\r\n";
+int global_val = 0;
 
 GtkTextBuffer *buffer;
 
@@ -103,3 +105,13 @@ struct DATA
 };
 
 Appstate app_state;
+
+struct data
+{
+	char *argv1;
+	char *user_data;
+	Appstate *app_state;		
+};
+struct data strrr;
+	
+

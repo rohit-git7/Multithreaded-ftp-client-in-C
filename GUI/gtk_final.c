@@ -1,4 +1,5 @@
 #include"header.h"
+#include"print_buff1.h"
 #include"print_buff.h"
 #include"list_client.h"
 #include"passive_connect.h"
@@ -89,6 +90,46 @@ void signal_handler_func(int sig_num)
 	
 }
 
+void prompt_error(Appstate *app_state)
+{
+
+	GtkWidget *popup_window;
+	GtkWidget *table;
+	GtkWidget *label;
+	GtkWidget *horiz_align;
+	
+
+	popup_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_title (GTK_WINDOW (popup_window), "Connection error");
+	gtk_container_set_border_width (GTK_CONTAINER (popup_window), 10);
+	gtk_window_set_resizable (GTK_WINDOW (popup_window), FALSE);
+	gtk_window_set_decorated (GTK_WINDOW (popup_window), TRUE);
+	gtk_window_set_skip_taskbar_hint (GTK_WINDOW (popup_window), TRUE);
+	gtk_window_set_skip_pager_hint (GTK_WINDOW (popup_window), TRUE);
+	gtk_widget_set_size_request (popup_window, 350, 60);
+	gtk_window_set_transient_for (GTK_WINDOW (popup_window), GTK_WINDOW (app_state->window));
+	gtk_window_set_position (GTK_WINDOW (popup_window), GTK_WIN_POS_CENTER);
+
+	gtk_widget_set_events (popup_window, GDK_FOCUS_CHANGE_MASK);
+	g_signal_connect (G_OBJECT (popup_window),
+               			    "focus-out-event",
+              		 		    G_CALLBACK (on_popup_focus_out),
+                   				NULL);
+	
+	table = gtk_table_new (2,2,FALSE);
+	gtk_container_add(GTK_CONTAINER(popup_window),table);
+	label = gtk_label_new("Error! Server disconnected. Try again later.");
+
+	horiz_align = gtk_alignment_new(0,0,0,0);
+    
+	gtk_container_add(GTK_CONTAINER(horiz_align),label);
+	gtk_table_attach(GTK_TABLE(table),horiz_align,1,2,0,1,GTK_FILL,GTK_FILL,0,0);
+	
+	gtk_widget_show_all (popup_window);
+	gtk_widget_grab_focus (popup_window);
+	return;
+}
+
 /* User callback for "getting" the data out of the row that was DnD'd */
 void on_drag_data_get_serv(GtkWidget *widget,GdkDragContext *drag_context,GtkSelectionData *sdata, guint info, guint time,gpointer user_data)
 {
@@ -104,7 +145,8 @@ void on_drag_data_get_serv(GtkWidget *widget,GdkDragContext *drag_context,GtkSel
 	rv = gtk_tree_selection_get_selected(selector,&list_store,&iter);
  
 	/* This shouldn't really happen, but just in case */
-	if(rv == FALSE){
+	if(rv == FALSE)
+	{
 		return;
 	}
  
@@ -171,9 +213,11 @@ void on_drag_data_received_cli(GtkWidget *widget, GdkDragContext *drag_context,g
 	sprintf(user_input,"get %s",temp->name);
 
 	if(temp->perm[0] == '-')
-	{	gtk_entry_set_text(GTK_ENTRY(app_state->command),user_input); 
+	{
+		gtk_entry_set_text(GTK_ENTRY(app_state->command),user_input); 
 		down_serv(app_state,user_input);
 	    	gtk_entry_set_text(GTK_ENTRY(app_state->command),"Command"); 
+	
 	}
 	else
 		return;
@@ -241,6 +285,7 @@ void on_drag_data_get_cli(GtkWidget *widget,GdkDragContext *drag_context,GtkSele
 		(void *)&temp,  /* The actual pointer that we just made */
 		sizeof (temp)); /* The size of the pointer */
  
+	
 }
  
 /* User callback for putting the data into the other treeview */
@@ -287,7 +332,6 @@ void move_up_dir_cli(GtkWidget *widget, Appstate *app_state)
 	gtk_entry_set_text(GTK_ENTRY(app_state->command),user_input); 
 	cli_cd_dir(app_state,user_input);	
 	gtk_entry_set_text(GTK_ENTRY(app_state->command),"Command");
-	
 	return;
 }
 
@@ -321,30 +365,37 @@ void upload_cli(Appstate *app_state,char *user_input)
 		return;
 	}
 
+	int ret_value,rc;
+
+	pthread_t thr;
+	
+	char cwd[MAXSZ];
+	bzero(cwd,MAXSZ);
+
 	char *argv = (char *)malloc(MAXSZ);
 	
 	/* Get IP Address of server from IP Address entry */
 	argv = (char *)gtk_entry_get_text(GTK_ENTRY(app_state->entry));
 
-	clock_t start;
-	clock_t end;
-	
-	double cpu_time;
-	
-	int ret_value;
+	strrr.argv1 = argv;
+	strrr.user_data = user_input;
+	strrr.app_state = app_state;
 	
 	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
-	gtk_entry_set_text(GTK_ENTRY(app_state->command),user_input); 
 
-	start = clock();//Start clock
-	put_unique(argv,user_input,app_state);//Call function to put files
-	end = clock();//Stop clock
-	cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;//Calculate CPU time
-	sprintf(buff,"Time taken %lf\n\n",cpu_time);
-	print_buff(app_state);
+	global_val = 0;
+	rc = pthread_create(&thr,NULL,put_unique,(void *)&strrr);
 
+	while(global_val != 1 && rc != -1)
+	{
+		while(gtk_events_pending())
+			gtk_main_iteration();
+	}
+	global_val = 0;
+//	put_unique(argv,user_input,app_state);
+	
 	/* Reset 'running' variable */
 	ret_value = list_content_view(argv,"ls -l",app_state);
 	if(ret_value == 0)
@@ -352,7 +403,6 @@ void upload_cli(Appstate *app_state,char *user_input)
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
 	gtk_entry_set_text(GTK_ENTRY(app_state->command),"Command"); 
-
 	return;
 }
 
@@ -1193,6 +1243,7 @@ gboolean view_onButtonPressed(GtkWidget *treeview, GdkEventButton *event,Appstat
 		{
 			GtkTreeSelection *selection;
 			selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+		//	gtk_tree_selection_set_mode(selection,GTK_SELECTION_MULTIPLE);
  
 			if (gtk_tree_selection_count_selected_rows(selection)  <= 1)
 			{
@@ -1218,6 +1269,7 @@ gboolean view_onButtonPressed(GtkWidget *treeview, GdkEventButton *event,Appstat
 		{
 			GtkTreeSelection *selection;
 			selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+		//	gtk_tree_selection_set_mode(selection,GTK_SELECTION_MULTIPLE);
  
 			if (gtk_tree_selection_count_selected_rows(selection)  <= 1)
 			{
@@ -1251,6 +1303,7 @@ gboolean view_onButtonPressed_cli(GtkWidget *treeview, GdkEventButton *event,App
 		{
 			GtkTreeSelection *selection;
 			selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+		//	gtk_tree_selection_set_mode(selection,GTK_SELECTION_MULTIPLE);
  
 			if (gtk_tree_selection_count_selected_rows(selection)  <= 1)
 			{
@@ -1276,6 +1329,7 @@ gboolean view_onButtonPressed_cli(GtkWidget *treeview, GdkEventButton *event,App
 		{
 			GtkTreeSelection *selection;
 			selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+		//	gtk_tree_selection_set_mode(selection,GTK_SELECTION_MULTIPLE);
  
 			if (gtk_tree_selection_count_selected_rows(selection)  <= 1)
 			{
@@ -1321,9 +1375,8 @@ static GtkWidget *create_view_and_model1(Appstate *app_state)
 	GtkCellRenderer     *renderer;
 	GtkTreeModel        *model;
 	GtkWidget           *view;
- 
+
 	view = gtk_tree_view_new ();
- 
 	g_signal_connect(view, "button-press-event", (GCallback) view_onButtonPressed_cli, app_state);
 	g_signal_connect(view, "popup-menu", (GCallback) view_onPopupMenu_cli, app_state);
 
@@ -1633,7 +1686,7 @@ void rmdir_cli(Appstate *app_state,char *user_input)
 	else
 		sprintf(buff,"Directory successfully removed\n\n");
 	
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
@@ -1678,7 +1731,7 @@ void rmdir_serv(Appstate *app_state,char *user_input)
 
 	sprintf(message_to_server,"RMD %s\r\n",user_input + 6);
 	sprintf(buff,"Command: RMD %s\nResponse: ",user_input + 6);	
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	/* Send request to server to remove specified directory */
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
@@ -1686,14 +1739,14 @@ void rmdir_serv(Appstate *app_state,char *user_input)
 	{
 		message_from_server[no_of_bytes] = '\0';
 		sprintf(buff,"%s",message_from_server);
-		print_buff(app_state);
+		print_buff1(app_state);
 				
 
 		if(strstr(message_from_server,"250 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
 			break;	
 	}
 	sprintf(buff,"\n");
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	ret_value = list_content_view(argv,"ls -l",app_state);	
 	if(ret_value == 0)
@@ -1734,7 +1787,7 @@ void mkdir_cli(Appstate *app_state,char *user_input)
 	else
 		sprintf(buff,"Directory successfully created\n\n");
 	
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	getcwd(cwd,MAXSZ);
 	ls_l_dir_view(app_state,cwd);
@@ -1768,7 +1821,7 @@ void rename_cli(Appstate *app_state,char *old_name, char *new_name)
 	if(access(new_name,F_OK) == 0)
 	{
 		sprintf(buff,"Error: File cannot be renamed. Filename already present. Try another name!\n\n");
-		print_buff(app_state);
+		print_buff1(app_state);
 		return;
 	}
 
@@ -1779,13 +1832,13 @@ void rename_cli(Appstate *app_state,char *old_name, char *new_name)
 	if(rename(old_name,new_name) == 0)
 	{
 		sprintf(buff,"File renamed successfully!\n\n");
-		print_buff(app_state);
+		print_buff1(app_state);
 
 	}
 	else
 	{
 		sprintf(buff,"Error: %s\n\n",strerror(errno));
-		print_buff(app_state);
+		print_buff1(app_state);
 		
 	}
 
@@ -1833,7 +1886,7 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 
 	sprintf(message_to_server,"RNFR %s\r\n",old_name);
 	sprintf(buff,"Command: RNFR %s\nResponse: ",old_name);
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	/* Send command to server */	
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
@@ -1847,13 +1900,13 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 		}
 
 		sprintf(buff,"%s",message_from_server);
-		print_buff(app_state);
+		print_buff1(app_state);
 				
 		if(strstr(message_from_server,"350 ") > 0 || strstr(message_from_server,"450 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
 			break;	
 	}
 	sprintf(buff,"\n");
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 			
 	if(temp  == 1)
@@ -1861,12 +1914,11 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 		/* Renaming failed. Reset 'running' variable */
 		app_state->running = 0;
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
-	
 		return;
 	}
 	sprintf(message_to_server,"RNTO %s\r\n",new_name);
 	sprintf(buff,"Command: RNTO %s\nResponse: ",new_name);
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
@@ -1875,7 +1927,7 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 	{
 		message_from_server[no_of_bytes] = '\0';
 		sprintf(buff,"%s",message_from_server);
-		print_buff(app_state);
+		print_buff1(app_state);
 				
 				
 		if(strstr(message_from_server,"550 ") > 0 || strstr(message_from_server,"553 ") > 0 ||strstr(message_from_server,"250 ") > 0 || strstr(message_from_server,"532 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"503 ") > 0)
@@ -1883,7 +1935,7 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 
 	}
 	sprintf(buff,"\n");
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	ret_value = list_content_view(address,"ls -l",app_state);	
 	if(ret_value == 0)
@@ -1899,6 +1951,8 @@ void rename_serv(Appstate *app_state,char *old_name, char *new_name)
 /* Download file from server */
 void down_serv(Appstate *app_state,char *user_input)
 {
+	
+
 	if(app_state->status == 0)//Connection not established
 	{
 		no_connection(app_state);//Call popup window function
@@ -1911,6 +1965,9 @@ void down_serv(Appstate *app_state,char *user_input)
 		return;
 	}
 
+	pthread_t thr;
+	int rc;
+
 	char cwd[MAXSZ];
 	bzero(cwd,MAXSZ);
 
@@ -1922,17 +1979,29 @@ void down_serv(Appstate *app_state,char *user_input)
 	clock_t start;
 	clock_t end;
 	double cpu_time;
+	strrr.argv1 = argv;
+	strrr.user_data = user_input;
+	strrr.app_state = app_state;
 	
 	/* Set 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 	app_state->running = 1;
 
 	start = clock();//Start clock
-	get_content(argv,user_input,app_state);//Call function to get files
+	rc = pthread_create(&thr,NULL,get_content,(void *)&strrr);
+
+	while(global_val != 1 && rc != -1)
+	{
+		while(gtk_events_pending())
+			gtk_main_iteration();
+		
+	}
+	global_val = 0;
+	//get_content(argv,user_input,app_state);//Call function to get files
 	end = clock();//Stop clock
 	cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;//Calculate CPU time
 	sprintf(buff,"Time taken %lf\n\n",cpu_time);
-	print_buff(app_state);
+	print_buff1(app_state);
 
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
@@ -1982,7 +2051,7 @@ void serv_cd_dir(Appstate *app_state,char *user_input)
 	
 	sprintf(message_to_server,"CWD %s\r\n",user_input + 3);
 	sprintf(buff,"Command: CWD %s\nResponse: ",user_input+3);
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	/* Requesting to change directory */
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);	
@@ -1991,7 +2060,7 @@ void serv_cd_dir(Appstate *app_state,char *user_input)
 	{
 		message_from_server[no_of_bytes] = '\0';
 		sprintf(buff,"%s",message_from_server);
-		print_buff(app_state);
+		print_buff1(app_state);
 				
 		if(strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"250 ") > 0 || strstr(message_from_server,"500 ") > 0 || strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
 			break;
@@ -2042,7 +2111,7 @@ void serv_cd_dir(Appstate *app_state,char *user_input)
 		
 	gtk_entry_set_text(GTK_ENTRY(app_state->entry_dir),serv_curr_dir);
 	sprintf(buff,"You are in directory: \"%s\"\n\n",serv_curr_dir);
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	ret_value = list_content_view(argv,"ls -l",app_state);	
 	if(ret_value == 0)
@@ -2086,7 +2155,7 @@ void cli_cd_dir(Appstate *app_state,char *user_input)
 		sprintf(buff,"Error: %s\n\n",strerror(errno));
 	}
 	
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
@@ -2136,7 +2205,7 @@ void cli_rmfile(Appstate *app_state,char *user_input)
 		sprintf(buff,"Error: %s\n\n",strerror(errno));
 	}
 	
-	print_buff(app_state);
+	print_buff1(app_state);
 	ls_l_dir_view(app_state,cwd);
 	new_func_cli(app_state);
 	/* Reset 'running' variable */
@@ -2252,7 +2321,7 @@ void serv_rmfile(Appstate *app_state,char *user_input)
 	
 	sprintf(message_to_server,"DELE %s\r\n",user_input + 3);
 	sprintf(buff,"Command: DELE %s\nResponse: ",user_input+3);	
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	/* Requesting server to delete specified file */
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
@@ -2260,7 +2329,7 @@ void serv_rmfile(Appstate *app_state,char *user_input)
 	{
 		message_from_server[no_of_bytes] = '\0';
 		sprintf(buff,"%s\n",message_from_server);
-		print_buff(app_state);
+		print_buff1(app_state);
 				
 		if(strstr(message_from_server,"250 ") > 0 || strstr(message_from_server,"450 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
 			break;
@@ -2281,7 +2350,7 @@ void serv_rmfile(Appstate *app_state,char *user_input)
 /* This functions includes the case when commands are executed manually i.e without GUI */
 void run_command(GtkWidget *widget, Appstate *app_state)
 {
-	if(app_state->status == 0)//Connectionnot established
+	if(app_state->status == 0)//Connection not established
 	{
 		no_connection(app_state);
 		return;
@@ -2300,9 +2369,6 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 	int count;
 	int temp;
 	int j = 0;	
-
-	clock_t start,end;
-	double cpu_time;
 
 	char message_from_server[MAXSZ];/* message from server*/
 	char message_to_server[MAXSZ];/* message to server */
@@ -2339,7 +2405,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 		sprintf(message_to_server,"QUIT\r\n");
 		sprintf(buff,"Command: QUIT\nResponse: ");	
-		print_buff(app_state);
+		print_buff1(app_state);
 		
 		/* Send message to server */
 		send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
@@ -2347,13 +2413,13 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		{
 			message_from_server[no_of_bytes] = '\0';
 			sprintf(buff,"%s",message_from_server);
-			print_buff(app_state);
+			print_buff1(app_state);
 
 			if(strstr(message_from_server,"221 ") > 0 || strstr(message_from_server,"500 ") > 0)	
 				break;
 		}
 		sprintf(buff,"\n");
-		print_buff(app_state);
+		print_buff1(app_state);
 		close(app_state->sockfd);
 		app_state->status = 0;
 		app_state->running = 0;
@@ -2377,7 +2443,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 			sprintf(buff,"Error: %s\n",strerror(errno));
 		}
 	
-		print_buff(app_state);
+		print_buff1(app_state);
 		getcwd(cwd,MAXSZ);
 		ls_l_dir_view(app_state,cwd);
 		new_func_cli(app_state);
@@ -2392,7 +2458,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 		getcwd(working_dir,MAXSZ);	
 		sprintf(buff,"You are in directory: \"%s\"\n\n",working_dir);
-		print_buff(app_state);
+		print_buff1(app_state);
 	
 	}	
 
@@ -2438,7 +2504,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		if(count != 3)
 		{		
 			sprintf(buff,"Error: rename expects two arguments\n");
-			print_buff(app_state);
+			print_buff1(app_state);
 			app_state->running = 0;
 			gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 			return;
@@ -2461,7 +2527,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 			sprintf(buff,"Error: %s\n\n",strerror(errno));
 		}
 	
-		print_buff(app_state);
+		print_buff1(app_state);
 		ls_l_dir_view(app_state,working_dir);
 		new_func_cli(app_state);
 
@@ -2482,25 +2548,35 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 		sprintf(dir,"CWD %s\r\n",user_input + 3);
 		sprintf(buff,"Command: CWD %s\nResponse: ",user_input+3);
-		send(app_state->sockfd,dir,strlen(dir),0);
-	
-		print_buff(app_state);
+		sleep(10);
 		
+		print_buff1(app_state);
+		send(app_state->sockfd,dir,strlen(dir),0);
 		while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0)
 		{
 			message_from_server[no_of_bytes] = '\0';
 			sprintf(buff,"%s",message_from_server);
-			print_buff(app_state);
+			print_buff1(app_state);
 				
 			if(strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"250 ") > 0 || strstr(message_from_server,"500 ") > 0 || strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
 				break;
 		}
 		sprintf(buff,"\n");
-		print_buff(app_state);
+		print_buff1(app_state);
 		ret_value = list_content_view(argv,"ls -l",app_state);	
 		if(ret_value == 0)
 			new_func(app_state);
 		
+		if(strstr(message_from_server,"500 ") > 0)
+		{
+			prompt_error(app_state);
+			app_state->status = 0;
+			app_state->running = 0;
+			gtk_button_set_label(GTK_BUTTON(app_state->button),"Connect");
+			gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
+			gtk_entry_set_editable(GTK_ENTRY(app_state->entry),TRUE);
+			return;
+		}
 		/* Getting working directory to display after changing directory */
 		sprintf(message_to_server,"PWD\r\n");
 		
@@ -2538,7 +2614,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		serv_curr_dir[j] = '\0';
 		
 		gtk_entry_set_text(GTK_ENTRY(app_state->entry_dir),serv_curr_dir);
-	
+		
 	}
 	
 	/* List files on server side */
@@ -2556,7 +2632,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 		sprintf(message_to_server,"PWD\r\n");
 		sprintf(buff,"Command: PWD\nResponse: ");
-		print_buff(app_state);
+		print_buff1(app_state);
 	
 		send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
 		
@@ -2564,13 +2640,13 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		{
 			message_from_server[no_of_bytes] = '\0';
 			sprintf(buff,"%s",message_from_server);
-			print_buff(app_state);
+			print_buff1(app_state);
 				
 			if(strstr(message_from_server,"257 ") > 0 || strstr(message_from_server,"500 ") > 0 || strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
 				break;
 		}
 			sprintf(buff,"\n");
-			print_buff(app_state);
+			print_buff1(app_state);
 	
 	}
 
@@ -2579,12 +2655,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 	{
 		app_state->running = 1;
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
-		start = clock();
-		get_content(argv,user_input,app_state);
-		end = clock();
-		cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
-		sprintf(buff,"Time taken %lf\n\n",cpu_time);
-		print_buff(app_state);
+		//get_content(argv,user_input,app_state);
 		getcwd(cwd,MAXSZ);
 		ls_l_dir_view(app_state,cwd);
 		new_func_cli(app_state);
@@ -2596,12 +2667,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 	{
 		app_state->running = 1;
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
-		start = clock();
 		put_content(argv,user_input,app_state);
-		end = clock();
-		cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
-		sprintf(buff,"Time taken %lf\n\n",cpu_time);
-		print_buff(app_state);
 		ret_value = list_content_view(argv,"ls -l",app_state);	
 		if(ret_value == 0)
 			new_func(app_state);
@@ -2612,12 +2678,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 	{
 		app_state->running = 1;
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
-		start = clock();
-		put_unique(argv,user_input,app_state);
-		end = clock();
-		cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
-		sprintf(buff,"Time taken %lf\n\n",cpu_time);
-		print_buff(app_state);
+		//put_unique(argv,user_input,app_state);
 		ret_value = list_content_view(argv,"ls -l",app_state);	
 		if(ret_value == 0)
 			new_func(app_state);
@@ -2632,7 +2693,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		if(count != 3)
 		{		
 			sprintf(buff,"Error: rename expects two arguments\n");
-			print_buff(app_state);
+			print_buff1(app_state);
 			app_state->running = 0;
 			gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 			return;
@@ -2650,14 +2711,14 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 		sprintf(message_to_server,"MKD %s\r\n",user_input + 6);
 		sprintf(buff,"Command: MKD %s\nResponse: ",user_input+6);	
-		print_buff(app_state);
+		print_buff1(app_state);
 	
 		send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
 		while((no_of_bytes = recv(app_state->sockfd,message_from_server,MAXSZ,0)) > 0 )
 		{
 			message_from_server[no_of_bytes] = '\0';
 			sprintf(buff,"%s",message_from_server);
-			print_buff(app_state);
+			print_buff1(app_state);
 				
 
 			if(strstr(message_from_server,"257 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
@@ -2665,7 +2726,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 			
 		}	
 		sprintf(buff,"\n");
-		print_buff(app_state);
+		print_buff1(app_state);
 		ret_value = list_content_view(argv,"ls -l",app_state);	
 		if(ret_value == 0)	
 			new_func(app_state);
@@ -2687,7 +2748,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Running");
 		sprintf(message_to_server,"DELE %s\r\n",user_input + 3);
 		sprintf(buff,"Command: DELE %s\nResponse: ",user_input+3);	
-		print_buff(app_state);
+		print_buff1(app_state);
 	
 
 		send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
@@ -2695,7 +2756,7 @@ void run_command(GtkWidget *widget, Appstate *app_state)
 		{
 			message_from_server[no_of_bytes] = '\0';
 			sprintf(buff,"%s\n",message_from_server);
-			print_buff(app_state);
+			print_buff1(app_state);
 				
 			if(strstr(message_from_server,"250 ") > 0 || strstr(message_from_server,"450 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
 				break;
@@ -2771,7 +2832,7 @@ void close_func(GtkWidget *widget, Appstate *app_state)
 			/* Ask server to close connection */
 			sprintf(message_to_server,"QUIT\r\n");
 			sprintf(buff,"Command: QUIT\nResponse: ");	
-			print_buff(app_state);
+			print_buff1(app_state);
 		
 			/* Send message to server */
 			send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
@@ -2779,13 +2840,13 @@ void close_func(GtkWidget *widget, Appstate *app_state)
 			{
 				message_from_server[no_of_bytes] = '\0';
 				sprintf(buff,"%s",message_from_server);
-				print_buff(app_state);
+				print_buff1(app_state);
 
 				if(strstr(message_from_server,"221 ") > 0 || strstr(message_from_server,"500 ") > 0)	
 					break;
 			}		
 			sprintf(buff,"\n");
-			print_buff(app_state);
+			print_buff1(app_state);
 			close(app_state->sockfd);
 			usleep(500000);//wait 0.5 seconds
 		}	
@@ -2857,7 +2918,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 		sprintf(buff,"Command: QUIT\nResponse: ");	
 		sprintf(message_to_server,"QUIT\r\n");
 		sprintf(buff,"Command: QUIT\nResponse: ");	
-		print_buff(app_state);
+		print_buff1(app_state);
 		
 		/* Send message to server */
 		send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
@@ -2865,16 +2926,16 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 		{
 			message_from_server[no_of_bytes] = '\0';
 			sprintf(buff,"%s",message_from_server);
-			print_buff(app_state);
+			print_buff1(app_state);
 
 			if(strstr(message_from_server,"221 ") > 0 || strstr(message_from_server,"500 ") > 0)	
 				break;
 		}		
 		sprintf(buff,"\n");
-		print_buff(app_state);
+		print_buff1(app_state);
 		close(app_state->sockfd);
 		sprintf(buff,"Disconnected!!!\n\n");
-		print_buff(app_state);
+		print_buff1(app_state);
 		gtk_button_set_label(GTK_BUTTON(app_state->button),"Connect");
 		app_state->status = 0;
 		gtk_entry_set_editable(GTK_ENTRY(app_state->entry),TRUE);
@@ -3035,7 +3096,6 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	}
 
 	/* set connection variable */
-	
 	sprintf(buff,"Connected to %s.\n",argv);
 	
 	buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(app_state->text_view));
@@ -3051,13 +3111,13 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	{
 		message_from_server[no_of_bytes] = '\0';
 		sprintf(buff,"%s",message_from_server);
-		print_buff(app_state);
+		print_buff1(app_state);
 	
 		if(strstr(message_from_server,"220 ") > 0 || strstr(message_from_server,"421 ") > 0)	
 			break;
 	}
 	sprintf(buff,"\n");
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	if(strstr(message_from_server,"421 ") > 0)	
 		return -1;
@@ -3069,7 +3129,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	/* Send user details */
 	sprintf(user,"USER %s\r\n",username);
 	sprintf(buff,"Command: USER %s\nResponse: ",username);	
-	print_buff(app_state);
+	print_buff1(app_state);
 	send(app_state->sockfd,user,strlen(user),0);/* Send username to server */
 	
 
@@ -3097,14 +3157,14 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 		}
 
 		sprintf(buff,"%s",message_from_server);
-		print_buff(app_state);
+		print_buff1(app_state);
 		bzero(buff,MAXSZ);
 
 		if(strstr(message_from_server,"230 ") > 0 || strstr(message_from_server,"500 ") > 0 || strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"332 ") > 0 || strstr(message_from_server,"530 ")|| strstr(message_from_server,"331 ") > 0)
 			break;
 	}
 	sprintf(buff,"\n");
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	
 	if(temp == 1)
@@ -3112,7 +3172,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	
 		sprintf(pass,"PASS %s\r\n",password);
 		sprintf(buff,"Command: PASS ******\nResponse: ");
-		print_buff(app_state);
+		print_buff1(app_state);
 		
 		send(app_state->sockfd,pass,strlen(pass),0);/* Send password to server */
 
@@ -3141,7 +3201,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 				sprintf(buff,"%s",strstr(message_from_server,"230 "));
 			if(strstr(message_from_server,"530 ") > 0)
 				sprintf(buff,"%s",strstr(message_from_server,"530 "));
-			print_buff(app_state);
+			print_buff1(app_state);
 			bzero(buff,MAXSZ);
 
 			if(strstr(message_from_server,"230 ") > 0 || strstr(message_from_server,"500 ") > 0 || strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"332 ") > 0 || strstr(message_from_server,"530 ")|| strstr(message_from_server,"503 ") > 0 || strstr(message_from_server,"202 ") > 0)
@@ -3152,7 +3212,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	}	
 
 	sprintf(buff,"\n");
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	if(temp == 3 || temp == 0)
 	{
@@ -3167,7 +3227,7 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	/* System type(Server) */
 	sprintf(message_to_server,"SYST\r\n");
 	sprintf(buff,"Command: SYST\nResponse: ");
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
 
@@ -3175,14 +3235,14 @@ int connect_func(GtkWidget *widget, Appstate *app_state)
 	{
 		message_from_server[no_of_bytes] = '\0';
 		sprintf(buff,"%s",message_from_server);
-		print_buff(app_state);
+		print_buff1(app_state);
 		
 		if(strstr(message_from_server,"215 ") > 0 || strstr(message_from_server,"500 ") > 0 || strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0) 	
 			break;
 
 	}
 	sprintf(buff,"\n");
-	print_buff(app_state);
+	print_buff1(app_state);
 	ls_l_dir_view(app_state,".");	
 	new_func_cli(app_state);
 	ret_value = list_content_view(argv,"ls -l",app_state);	
@@ -3346,7 +3406,7 @@ void func_upload(GtkWidget *widget,Appstate *app_state)
 		/* Start clock */
 		start = clock();
 		
-		put_unique(argv,user_input,app_state);//Function to upload file
+		//put_unique(argv,user_input,app_state);//Function to upload file
 		/* Stop clock */
 		end = clock();
 
@@ -3359,7 +3419,7 @@ void func_upload(GtkWidget *widget,Appstate *app_state)
 		
 		cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
 		sprintf(buff,"Time taken %lf\n\n",cpu_time);
-		print_buff(app_state);
+		print_buff1(app_state);
 		
 	}
 	gtk_entry_set_text(GTK_ENTRY(app_state->command),"Command"); 
@@ -3427,7 +3487,7 @@ void mkdir_serv(Appstate *app_state,char *user_input)
 
 	sprintf(message_to_server,"MKD %s\r\n",user_input + 6);
 	sprintf(buff,"Command: MKD %s\nResponse: ",user_input+6);	
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	/* Request server to create directory */
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
@@ -3440,7 +3500,7 @@ void mkdir_serv(Appstate *app_state,char *user_input)
 		}
 		else
 			sprintf(buff,"%s\n",message_from_server);
-		print_buff(app_state);
+		print_buff1(app_state);
 				
 
 		if(strstr(message_from_server,"257 ") > 0 || strstr(message_from_server,"530 ") > 0 || strstr(message_from_server,"500 ") > 0|| strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
@@ -4016,6 +4076,7 @@ void rename_cli_func(GtkWidget *widget,Appstate *app_state)
 				gtk_entry_set_text(GTK_ENTRY(app_state->command),user_input); 
 				rename_cli(app_state,old_name,new_name);
 				gtk_entry_set_text(GTK_ENTRY(app_state->command),"Command");
+		
 			}
 	
 		        break;
@@ -4313,7 +4374,7 @@ void pwd_cli_func(GtkWidget *widget,Appstate *app_state)
 	char working_dir[MAXSZ];
 	getcwd(working_dir,MAXSZ);	
 	sprintf(buff,"You are in directory: \"%s\"\n\n",working_dir);
-	print_buff(app_state);
+	print_buff1(app_state);
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
 	app_state->running = 0;
 	gtk_entry_set_text(GTK_ENTRY(app_state->command),"Command"); 
@@ -4349,7 +4410,7 @@ void pwd_serv_func(GtkWidget *widget,Appstate *app_state)
 		
 	sprintf(message_to_server,"PWD\r\n");
 	sprintf(buff,"Command: PWD\nResponse: ");
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	/* Send request to server */
 	send(app_state->sockfd,message_to_server,strlen(message_to_server),0);
@@ -4358,13 +4419,13 @@ void pwd_serv_func(GtkWidget *widget,Appstate *app_state)
 	{
 		message_from_server[no_of_bytes] = '\0';
 		sprintf(buff,"%s",message_from_server);
-		print_buff(app_state);
+		print_buff1(app_state);
 				
 		if(strstr(message_from_server,"257 ") > 0 || strstr(message_from_server,"500 ") > 0 || strstr(message_from_server,"501 ") > 0 || strstr(message_from_server,"421 ") > 0 || strstr(message_from_server,"502 ") > 0 || strstr(message_from_server,"550 ") > 0)
 			break;
 	}
 	sprintf(buff,"\n");
-	print_buff(app_state);
+	print_buff1(app_state);
 	
 	/* Reset 'running' variable */
 	gtk_button_set_label(GTK_BUTTON(app_state->ok_button),"Run");
@@ -4560,7 +4621,7 @@ int main( int argc,char *argv[] )
 	app_state.temp_file_descriptor = mkstemp(temporary_file);
 	app_state.temp_file_descriptor_cli = mkstemp(temporary_file_cli);
 	
-	signal(SIGPIPE,signal_handler_func);
+	signal(SIGPIPE,SIG_IGN);
 	
 	GtkWidget *table;
 	GdkDragAction action = GDK_ACTION_COPY;
@@ -4603,8 +4664,13 @@ int main( int argc,char *argv[] )
 	GtkWidget *scrolled_window1;
 	GtkWidget *scrolled_window2;
 
+	GtkWidget *img;//move back image
+	
 	GtkAccelGroup *group;
-
+	g_thread_init(NULL);
+	gdk_threads_init();
+//	XInitThreads();
+	gdk_threads_enter();
 	gtk_init (&argc, &argv);
 	GdkColor color;
 	gdk_color_parse("white smoke",&color);
@@ -4621,7 +4687,7 @@ int main( int argc,char *argv[] )
 
 	gtk_container_set_border_width (GTK_CONTAINER (app_state.window),10);
 
-	table = gtk_table_new (12,4,FALSE);
+	table = gtk_table_new (12,40,FALSE);
 	gtk_table_set_col_spacings(GTK_TABLE(table),0);
 	gtk_container_add(GTK_CONTAINER(app_state.window),table);
 	
@@ -4630,40 +4696,41 @@ int main( int argc,char *argv[] )
 	horiz_align = gtk_alignment_new(0,0,0,0);
     
 	gtk_container_add(GTK_CONTAINER(horiz_align),label);
-	gtk_table_attach(GTK_TABLE(table),horiz_align,0,1,1,2,GTK_FILL,0,1,1);
+	//gtk_table_attach(GTK_TABLE(table),horiz_align,0,1,1,2,GTK_FILL,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),horiz_align,0,3,1,2,GTK_FILL,0,3,1);
 	label4 = gtk_label_new("\nUsername");
 
 	horiz_align4 = gtk_alignment_new(0,0,0,0);
     
 	gtk_container_add(GTK_CONTAINER(horiz_align4),label4);
-	gtk_table_attach(GTK_TABLE(table),horiz_align4,1,2,1,2,GTK_FILL,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),horiz_align4,3,6,1,2,GTK_FILL,0,3,1);
 	label5 = gtk_label_new("\nPassword:");
 
 	horiz_align5 = gtk_alignment_new(0,0,0,0);
     
 	gtk_container_add(GTK_CONTAINER(horiz_align5),label5);
-	gtk_table_attach(GTK_TABLE(table),horiz_align5,2,3,1,2,GTK_FILL,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),horiz_align5,6,9,1,2,GTK_FILL,0,3,1);
 	
 	label1 = gtk_label_new("\nClient:");
 
 	horiz_align1 = gtk_alignment_new(0,0,0,0);
     
 	gtk_container_add(GTK_CONTAINER(horiz_align1),label1);
-	gtk_table_attach(GTK_TABLE(table),horiz_align1,0,2,4,5,GTK_FILL,0,2,1);
+	gtk_table_attach(GTK_TABLE(table),horiz_align1,0,6,4,5,GTK_FILL,0,6,1);
 	
 	label3 = gtk_label_new("\nServer:");
 
 	horiz_align3 = gtk_alignment_new(0,0,0,0);
     
 	gtk_container_add(GTK_CONTAINER(horiz_align3),label3);
-	gtk_table_attach(GTK_TABLE(table),horiz_align3,2,4,4,5,GTK_FILL,0,2,1);
+	gtk_table_attach(GTK_TABLE(table),horiz_align3,6,12,4,5,GTK_FILL,0,6,1);
 
 	label2 = gtk_label_new("\nCommand/Response:");
 
 	horiz_align2 = gtk_alignment_new(0,0,0,0);
     
 	gtk_container_add(GTK_CONTAINER(horiz_align2),label2);
-	gtk_table_attach(GTK_TABLE(table),horiz_align2,0,4,8,9,GTK_FILL,0,4,1);
+	gtk_table_attach(GTK_TABLE(table),horiz_align2,0,12,8,9,GTK_FILL,0,12,1);
 	
 	/* Menu bar */
 	group = gtk_accel_group_new();	
@@ -4752,53 +4819,51 @@ int main( int argc,char *argv[] )
 	gtk_menu_shell_append (GTK_MENU_SHELL (quitmenu), quit);
 	gtk_signal_connect(GTK_OBJECT(quit),"activate",GTK_SIGNAL_FUNC(close_func),&app_state);
 
-	gtk_table_attach(GTK_TABLE(table),menubar,0,4,0,1,GTK_FILL|GTK_EXPAND,0,4,1);
+	gtk_table_attach(GTK_TABLE(table),menubar,0,12,0,1,GTK_FILL|GTK_EXPAND,0,12,1);
 	
 	/* Directory on server side */
 	app_state.entry_dir = gtk_entry_new_with_max_length(1024);
 	gtk_entry_set_text (GTK_ENTRY (app_state.entry_dir),"Working directory");
 	gtk_entry_select_region (GTK_ENTRY (app_state.entry_dir),0, GTK_ENTRY(app_state.entry_dir)->text_length);
 
-//	gtk_entry_set_editable(GTK_ENTRY(app_state.entry_dir),FALSE);
-	gtk_table_attach(GTK_TABLE(table),app_state.entry_dir,2,3,5,6,GTK_FILL,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.entry_dir,7,11,5,6,GTK_FILL,0,4,1);
 	/* Directory on client side */
 	app_state.entry_dir_cli = gtk_entry_new_with_max_length(1024);
 	gtk_entry_set_text (GTK_ENTRY (app_state.entry_dir_cli),"Working directory");
 	gtk_entry_select_region (GTK_ENTRY (app_state.entry_dir_cli),0, GTK_ENTRY(app_state.entry_dir_cli)->text_length);
-//	gtk_entry_set_editable(GTK_ENTRY(app_state.entry_dir_cli),FALSE);
 
-	gtk_table_attach(GTK_TABLE(table),app_state.entry_dir_cli,0,1,5,6,GTK_FILL,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.entry_dir_cli,1,5,5,6,GTK_FILL,0,4,1);
 
 	/* IP Address */
 	app_state.entry = gtk_entry_new_with_max_length(200);
 	gtk_entry_set_text (GTK_ENTRY (app_state.entry),"IP Address");
 	gtk_entry_select_region (GTK_ENTRY (app_state.entry),0, GTK_ENTRY(app_state.entry)->text_length);
-	gtk_table_attach(GTK_TABLE(table),app_state.entry,0,1,2,3,GTK_FILL,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.entry,0,3,2,3,GTK_FILL,0,3,1);
     
 	/* Username */
 	app_state.user = gtk_entry_new_with_max_length(100);
 	gtk_entry_set_text (GTK_ENTRY (app_state.user),"Username");
 	gtk_entry_select_region (GTK_ENTRY (app_state.user),0, GTK_ENTRY(app_state.user)->text_length);
-	gtk_table_attach(GTK_TABLE(table),app_state.user,1,2,2,3,GTK_FILL,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.user,3,6,2,3,GTK_FILL,0,3,1);
 
 	/* Password */
 	app_state.password = gtk_entry_new_with_max_length(100);
 	gtk_entry_set_text (GTK_ENTRY (app_state.password),"Password");
 	gtk_entry_select_region (GTK_ENTRY (app_state.password),0, GTK_ENTRY(app_state.password)->text_length);
 	gtk_entry_set_visibility(GTK_ENTRY(app_state.password),FALSE);
-	gtk_table_attach(GTK_TABLE(table),app_state.password,2,3,2,3,GTK_FILL|GTK_EXPAND,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.password,6,9,2,3,GTK_FILL|GTK_EXPAND,0,3,1);
 
 	/* Command */
 	app_state.command = gtk_entry_new_with_max_length(1024);
 	gtk_entry_set_text (GTK_ENTRY (app_state.command),"Command");
 	gtk_entry_select_region (GTK_ENTRY (app_state.command),0, GTK_ENTRY(app_state.command)->text_length);
-	gtk_table_attach(GTK_TABLE(table),app_state.command,0,3,3,4,GTK_FILL,0,3,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.command,0,9,3,4,GTK_FILL,0,9,1);
     
 	/* Select file */
 	app_state.fileselect = gtk_entry_new_with_max_length(4096);
 	gtk_entry_set_text (GTK_ENTRY (app_state.fileselect),"Select file to upload");
 	gtk_entry_select_region (GTK_ENTRY (app_state.fileselect),0, GTK_ENTRY(app_state.fileselect)->text_length);
-	gtk_table_attach(GTK_TABLE(table),app_state.fileselect,0,3,10,11,GTK_FILL,0,3,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.fileselect,0,9,10,11,GTK_FILL,0,9,1);
     
 	/* Text view (Command and Response) */
 	app_state.text_view = gtk_text_view_new_with_buffer(buffer);                                    
@@ -4808,7 +4873,7 @@ int main( int argc,char *argv[] )
 
 	scrolled_window = gtk_scrolled_window_new(NULL, NULL);              
 	gtk_container_add(GTK_CONTAINER(scrolled_window), app_state.text_view);       
-	gtk_table_attach(GTK_TABLE(table),scrolled_window,0,4,9,10,GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,4,1);
+	gtk_table_attach(GTK_TABLE(table),scrolled_window,0,12,9,10,GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,12,1);
   
 	/* List store for server files*/
 	app_state.view = create_view_and_model (&app_state);
@@ -4823,7 +4888,7 @@ int main( int argc,char *argv[] )
 	gtk_drag_dest_set(app_state.view1,GTK_DEST_DEFAULT_ALL,&drag_targets,n_targets,action); 
 	/* Attach a "drag-data-received" signal to pull in the dragged data */
 	g_signal_connect(app_state.view1,"drag-data-received",G_CALLBACK(on_drag_data_received_cli),&app_state);
-	gtk_table_attach(GTK_TABLE(table),scrolled_window1,2,4,6,7,GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,2,1);
+	gtk_table_attach(GTK_TABLE(table),scrolled_window1,6,12,6,7,GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,6,1);
   
 
 	/* List store for client files*/
@@ -4837,49 +4902,55 @@ int main( int argc,char *argv[] )
 	/* Attach a "drag-data-received" signal to pull in the dragged data */
 	g_signal_connect(app_state.view,"drag-data-received",G_CALLBACK(on_drag_data_received_serv),&app_state);
  
-	gtk_table_attach(GTK_TABLE(table),scrolled_window2,0,2,6,7,GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,2,1);
+	gtk_table_attach(GTK_TABLE(table),scrolled_window2,0,6,6,7,GTK_FILL|GTK_EXPAND,GTK_FILL|GTK_EXPAND,6,1);
   
 	/* Connect button */
 	app_state.button = gtk_button_new_with_label("Connect");
 	gtk_signal_connect(GTK_OBJECT(app_state.button), "clicked",GTK_SIGNAL_FUNC(connect_func),&app_state);
 	gtk_widget_set_size_request(app_state.button,BUTTON_WIDTH,BUTTON_HEIGHT);
-	gtk_table_attach(GTK_TABLE(table),app_state.button,3,4,2,3,0,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.button,9,12,2,3,0,0,3,1);
+	
 	
 	/* Move up button */
-	up = gtk_button_new_with_label("Move Up");
+	img = gtk_image_new_from_file("back1.png");
+	up = gtk_button_new_with_label(NULL);
+	gtk_button_set_image(GTK_BUTTON(up),img);
 	gtk_signal_connect(GTK_OBJECT(up), "clicked",GTK_SIGNAL_FUNC(move_up_dir),&app_state);
-	gtk_widget_set_size_request(up,BUTTON_WIDTH,BUTTON_HEIGHT);
-	gtk_table_attach(GTK_TABLE(table),up,3,4,5,6,0,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),up,6,7,5,6,0,0,1,1);
 
+	img = gtk_image_new_from_file("back1.png");
 	/* Move up button client */
-	move_up_cli = gtk_button_new_with_label("Move Up");
+	move_up_cli = gtk_button_new_with_label(NULL);
+		
+	gtk_button_set_image(GTK_BUTTON(move_up_cli),img);
 	gtk_signal_connect(GTK_OBJECT(move_up_cli), "clicked",GTK_SIGNAL_FUNC(move_up_dir_cli),&app_state);
-	gtk_widget_set_size_request(move_up_cli,BUTTON_WIDTH,BUTTON_HEIGHT);
-	gtk_table_attach(GTK_TABLE(table),move_up_cli,1,2,5,6,0,0,1,1);
-
+	gtk_table_attach(GTK_TABLE(table),move_up_cli,0,1,5,6,0,0,2,1);
 
 	/* Run button */
 	app_state.ok_button = gtk_button_new_with_label("Run");
 	gtk_signal_connect(GTK_OBJECT(app_state.ok_button), "clicked",GTK_SIGNAL_FUNC(run_command),&app_state);
 	gtk_widget_set_size_request(app_state.ok_button,BUTTON_WIDTH,BUTTON_HEIGHT);
-	gtk_table_attach(GTK_TABLE(table),app_state.ok_button,3,4,3,4,0,0,1,1);
+	//gtk_table_attach(GTK_TABLE(table),app_state.ok_button,3,4,3,4,0,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.ok_button,9,12,3,4,0,0,3,1);
 
 	/* Select button */
 	select_button = gtk_button_new_with_label("Select");
 	gtk_signal_connect(GTK_OBJECT(select_button), "clicked",GTK_SIGNAL_FUNC(file_select),&app_state);
 	gtk_widget_set_size_request(select_button,BUTTON_WIDTH,BUTTON_HEIGHT);
-	gtk_table_attach(GTK_TABLE(table),select_button,3,4,10,11,0,0,1,1);
+	//gtk_table_attach(GTK_TABLE(table),select_button,3,4,10,11,0,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),select_button,9,12,10,11,0,0,3,1);
 	
 	/* Upload button */
 	app_state.ok_file_button = gtk_button_new_with_label("Upload");
 	gtk_signal_connect(GTK_OBJECT(app_state.ok_file_button), "clicked",GTK_SIGNAL_FUNC(func_upload),&app_state);
 	gtk_widget_set_size_request(app_state.ok_file_button,BUTTON_WIDTH,BUTTON_HEIGHT);
-	gtk_table_attach(GTK_TABLE(table),app_state.ok_file_button,3,4,11,12,GTK_EXPAND,0,1,1);
+	//gtk_table_attach(GTK_TABLE(table),app_state.ok_file_button,3,4,11,12,GTK_EXPAND,0,1,1);
+	gtk_table_attach(GTK_TABLE(table),app_state.ok_file_button,9,12,11,12,GTK_EXPAND,0,3,1);
 	
 	gtk_window_add_accel_group (GTK_WINDOW (app_state.window), group);
 
 	gtk_widget_show_all(app_state.window);
-
 	gtk_main();
+	gdk_threads_leave();
 	return 0;
 }	

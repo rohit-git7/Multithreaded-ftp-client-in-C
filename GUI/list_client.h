@@ -245,8 +245,8 @@ void ls_l_dir_view(Appstate *app_state,char *dir_name)
 			i++;
 		}
 		
-		while(gtk_events_pending())
-			gtk_main_iteration();
+//		while(gtk_events_pending())
+//			gtk_main_iteration();
 
 	}
 
@@ -336,8 +336,8 @@ void ls_l_dir_view(Appstate *app_state,char *dir_name)
 			else
 				strcat(data,"-");
 
-		while(gtk_events_pending())
-			gtk_main_iteration();
+	//	while(gtk_events_pending())
+	//		gtk_main_iteration();
 			write(app_state->temp_file_descriptor_cli,data,strlen(data));
 			bzero(data,MAXSZ);
 			if(((file_buff.st_mode & S_IFMT)^S_IFCHR) == 0 || ((file_buff.st_mode & S_IFMT)^S_IFBLK) ==0)

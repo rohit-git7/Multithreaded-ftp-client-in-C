@@ -15,6 +15,9 @@ void put_content(char *arg,char *user_input,Appstate *app_state)
 	int file_size;
 	int size;
 	int down = 2;
+
+	clock_t start,end;
+	double cpu_time;
 	
 	struct timeval tm;/* time structure to set time wait for receive buffer */
 	struct stat file_buff;
@@ -122,6 +125,9 @@ void put_content(char *arg,char *user_input,Appstate *app_state)
 			temp1 = temp;
 			sprintf(buff,"Uploading [");
 			print_buff(app_state);
+			
+			start = clock();
+			
 			while(size > 0)
 			{
 				no_of_bytes = read(fd,data,MAXSZ);
@@ -140,14 +146,18 @@ void put_content(char *arg,char *user_input,Appstate *app_state)
                 		{
                 		        p = send(newsockfd,data + total,no_of_bytes - total,0);
                        			 total += p;
-					while(gtk_events_pending())
-						gtk_main_iteration();
 				}
 				size -= no_of_bytes;
 				bzero(data,MAXSZ);
 			}
+			
+			end = clock();
 		
 			sprintf(buff,"] 100%%\n");
+			print_buff(app_state);
+		
+			cpu_time = ((double)(end - start))/CLOCKS_PER_SEC;
+			sprintf(buff,"Time taken %lf\n\n",cpu_time);
 			print_buff(app_state);
 					
 			close(fd);
